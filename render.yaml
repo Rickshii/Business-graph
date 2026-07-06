@@ -2,6 +2,7 @@ services:
   - type: web
     name: brgi-backend
     env: node
+    rootDir: backend
     buildCommand: npm install && npm run build && npx prisma generate
     startCommand: npm start
     healthCheckPath: /health
