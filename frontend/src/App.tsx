@@ -114,7 +114,12 @@ export default function App() {
         setToken(res.data.token); setUser(res.data.user);
       }
     } catch (err: any) {
-      setAuthError(err.response?.data?.error || err.message || 'Authentication failed. Check credentials.');
+      const isNetworkErr = !err.response && (err.message === 'Network Error' || err.code === 'ERR_NETWORK');
+      setAuthError(
+        isNetworkErr
+          ? 'Cannot reach the server. Check your internet connection or try again shortly.'
+          : err.response?.data?.error || err.message || 'Authentication failed. Check credentials.'
+      );
     } finally { setAuthLoading(false); }
   };
 
