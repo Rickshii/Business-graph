@@ -6,6 +6,16 @@ import {
 } from 'lucide-react';
 import { api, getSocket } from './services/api';
 
+// ── Local mock users (used as fallback when backend is offline) ──────────────
+const MOCK_USERS = [
+  { id: 'u_admin',   email: 'admin@brgi.com',   password: 'admin123',   name: 'Administrator', role: 'ADMIN'   },
+  { id: 'u_analyst', email: 'analyst@brgi.com', password: 'analyst123', name: 'Sarah Connor',  role: 'ANALYST' },
+  { id: 'u_viewer',  email: 'viewer@brgi.com',  password: 'viewer123',  name: 'John Doe',      role: 'VIEWER'  },
+];
+
+const makeMockToken = (user: any) => btoa(JSON.stringify({ id: user.id, email: user.email, role: user.role, name: user.name }));
+const parseMockToken = (token: string) => { try { return JSON.parse(atob(token)); } catch { return null; } };
+
 // Pages
 import Dashboard from './pages/Dashboard';
 import GraphExplorer from './pages/GraphExplorer';
@@ -40,12 +50,19 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[]>([]);
 
-  // Load user
+  // Load user — try real API first, fall back to localStorage/mock token
   useEffect(() => {
     if (token) {
+      const cached = localStorage.getItem('brgi_user');
+      if (cached) { try { setUser(JSON.parse(cached)); } catch {} }
       api.get('/auth/me')
-        .then(res => setUser(res.data.user))
-        .catch(() => handleLogout());
+        .then(res => { setUser(res.data.user); localStorage.setItem('brgi_user', JSON.stringify(res.data.user)); })
+        .catch(() => {
+          // Backend offline — try to decode mock token
+          const decoded = parseMockToken(token);
+          if (decoded) { setUser(decoded); }
+          else { handleLogout(); }
+        });
     }
   }, [token]);
 
@@ -107,24 +124,41 @@ export default function App() {
       if (isLogin) {
         const res = await api.post('/auth/login', { email, password });
         localStorage.setItem('brgi_token', res.data.token);
+        localStorage.setItem('brgi_user', JSON.stringify(res.data.user));
         setToken(res.data.token); setUser(res.data.user);
       } else {
         const res = await api.post('/auth/register', { email, password, name, role });
         localStorage.setItem('brgi_token', res.data.token);
+        localStorage.setItem('brgi_user', JSON.stringify(res.data.user));
         setToken(res.data.token); setUser(res.data.user);
       }
     } catch (err: any) {
-      const isNetworkErr = !err.response && (err.message === 'Network Error' || err.code === 'ERR_NETWORK');
-      setAuthError(
-        isNetworkErr
-          ? 'Cannot reach the server. Check your internet connection or try again shortly.'
-          : err.response?.data?.error || err.message || 'Authentication failed. Check credentials.'
-      );
+      const isNetworkErr = !err.response && (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED');
+      if (isNetworkErr && isLogin) {
+        // Backend offline — try local mock users
+        const mockUser = MOCK_USERS.find(u => u.email === email && u.password === password);
+        if (mockUser) {
+          const { password: _, ...safeUser } = mockUser;
+          const mockToken = makeMockToken(safeUser);
+          localStorage.setItem('brgi_token', mockToken);
+          localStorage.setItem('brgi_user', JSON.stringify(safeUser));
+          setToken(mockToken); setUser(safeUser);
+        } else {
+          setAuthError('Invalid email or password.');
+        }
+      } else {
+        setAuthError(
+          isNetworkErr
+            ? 'Cannot reach the server. Register requires a live backend.'
+            : err.response?.data?.error || err.message || 'Authentication failed. Check credentials.'
+        );
+      }
     } finally { setAuthLoading(false); }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('brgi_token');
+    localStorage.removeItem('brgi_user');
     setToken(null); setUser(null);
   };
 
