@@ -15,11 +15,5 @@
         { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
     }
-  ],
-  "build": {
-    "env": {
-      "VITE_API_URL": "@vite_api_url",
-      "VITE_SOCKET_URL": "@vite_socket_url"
-    }
-  }
+  ]
 }
