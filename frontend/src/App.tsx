@@ -7,11 +7,24 @@ import {
 import { api, getSocket } from './services/api';
 
 // ── Local mock users (used as fallback when backend is offline) ──────────────
-const MOCK_USERS = [
+const DEFAULT_MOCK_USERS = [
   { id: 'u_admin',   email: 'admin@brgi.com',   password: 'admin123',   name: 'Administrator', role: 'ADMIN'   },
   { id: 'u_analyst', email: 'analyst@brgi.com', password: 'analyst123', name: 'Sarah Connor',  role: 'ANALYST' },
   { id: 'u_viewer',  email: 'viewer@brgi.com',  password: 'viewer123',  name: 'John Doe',      role: 'VIEWER'  },
 ];
+
+// Merges built-in demo accounts with any locally-registered accounts
+const getLocalUsers = () => {
+  try { return [...DEFAULT_MOCK_USERS, ...JSON.parse(localStorage.getItem('brgi_local_users') || '[]')]; }
+  catch { return DEFAULT_MOCK_USERS; }
+};
+
+const saveLocalUser = (user: any) => {
+  try {
+    const existing = JSON.parse(localStorage.getItem('brgi_local_users') || '[]');
+    localStorage.setItem('brgi_local_users', JSON.stringify([...existing, user]));
+  } catch {}
+};
 
 const makeMockToken = (user: any) => btoa(JSON.stringify({ id: user.id, email: user.email, role: user.role, name: user.name }));
 const parseMockToken = (token: string) => { try { return JSON.parse(atob(token)); } catch { return null; } };
@@ -135,8 +148,8 @@ export default function App() {
     } catch (err: any) {
       const isNetworkErr = !err.response && (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED');
       if (isNetworkErr && isLogin) {
-        // Backend offline — try local mock users
-        const mockUser = MOCK_USERS.find(u => u.email === email && u.password === password);
+        // Backend offline — try local users (demo + registered)
+        const mockUser = getLocalUsers().find(u => u.email === email && u.password === password);
         if (mockUser) {
           const { password: _, ...safeUser } = mockUser;
           const mockToken = makeMockToken(safeUser);
@@ -146,12 +159,22 @@ export default function App() {
         } else {
           setAuthError('Invalid email or password.');
         }
+      } else if (isNetworkErr && !isLogin) {
+        // Backend offline — register locally
+        const allUsers = getLocalUsers();
+        if (allUsers.find(u => u.email === email)) {
+          setAuthError('An account with this email already exists.');
+        } else {
+          const newUser = { id: `u_${Date.now()}`, email, password, name, role };
+          saveLocalUser(newUser);
+          const { password: _, ...safeUser } = newUser;
+          const mockToken = makeMockToken(safeUser);
+          localStorage.setItem('brgi_token', mockToken);
+          localStorage.setItem('brgi_user', JSON.stringify(safeUser));
+          setToken(mockToken); setUser(safeUser);
+        }
       } else {
-        setAuthError(
-          isNetworkErr
-            ? 'Cannot reach the server. Register requires a live backend.'
-            : err.response?.data?.error || err.message || 'Authentication failed. Check credentials.'
-        );
+        setAuthError(err.response?.data?.error || err.message || 'Authentication failed. Check credentials.');
       }
     } finally { setAuthLoading(false); }
   };
