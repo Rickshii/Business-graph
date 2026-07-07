@@ -24,8 +24,13 @@ const mockNotifications: any[] = [
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
     const graphStatus = graphService.getStatus();
-    let userCount = mockUsers.length;
-    try { userCount = await prisma.user.count(); } catch {}
+
+    // Merge DB user count + mock users (deduplicated)
+    let dbUsers: any[] = [];
+    try { dbUsers = await prisma.user.findMany({ select: { email: true } }); } catch {}
+    const dbEmails = new Set(dbUsers.map((u: any) => u.email));
+    const mockOnlyCount = mockUsers.filter(u => !dbEmails.has(u.email)).length;
+    const userCount = dbUsers.length + mockOnlyCount;
 
     res.json({
       graphConnected: graphStatus.connected,
@@ -54,18 +59,22 @@ router.get('/analytics', authMiddleware, async (req, res) => {
 // ─── User Management ─────────────────────────────────────────────
 router.get('/users', authMiddleware, requireRole(['ADMIN']), async (req, res) => {
   try {
+    // Fetch DB users
+    let dbUsers: any[] = [];
     try {
-      const users = await prisma.user.findMany({
+      dbUsers = await prisma.user.findMany({
         select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
         orderBy: { createdAt: 'desc' }
       });
-      return res.json(users);
-    } catch {
-      return res.json(mockUsers.map(u => ({
-        id: u.id, email: u.email, name: u.name,
-        role: u.role, status: u.status, createdAt: u.createdAt
-      })));
-    }
+    } catch {}
+
+    // Merge with mock users, skipping emails that exist in DB
+    const dbEmails = new Set(dbUsers.map((u: any) => u.email));
+    const mockOnly = mockUsers
+      .filter(u => !dbEmails.has(u.email))
+      .map(u => ({ id: u.id, email: u.email, name: u.name, role: u.role, status: u.status, createdAt: u.createdAt }));
+
+    return res.json([...dbUsers, ...mockOnly]);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

@@ -57,7 +57,12 @@ router.post('/register', async (req, res) => {
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
     return res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
   } catch (error: any) {
-    console.warn('Prisma registration failed. Using mock in-memory store.');
+    // Prisma unique constraint violation — email already exists in DB
+    if (error?.code === 'P2002') {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    // DB connection failure — fall back to mock in-memory store
+    console.warn('[Auth] Prisma registration failed (connection). Using mock in-memory store.', error?.message);
     const userExists = mockUsers.find(u => u.email === email);
     if (userExists) return res.status(400).json({ error: 'Email already exists' });
 
@@ -76,16 +81,19 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
+  // 1. Try PostgreSQL first
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (user && bcrypt.compareSync(password, user.passwordHash)) {
       const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
       return res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
     }
+    // User not found in DB — fall through to mock check
   } catch (error) {
-    console.warn('Prisma login failed. Using mock store.');
+    console.warn('[Auth] Prisma login failed (connection). Falling back to mock store.');
   }
 
+  // 2. Fall back to mock store (demo accounts + offline-registered users)
   const mockUser = mockUsers.find(u => u.email === email);
   if (mockUser && bcrypt.compareSync(password, mockUser.passwordHash)) {
     const token = jwt.sign({ id: mockUser.id, email: mockUser.email, role: mockUser.role, name: mockUser.name }, JWT_SECRET, { expiresIn: '7d' });

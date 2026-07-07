@@ -1,4 +1,5 @@
 import neo4j, { Driver, Session } from 'neo4j-driver';
+import { PrismaClient } from '@prisma/client';
 
 export interface GraphNode {
   id: string;
@@ -20,17 +21,61 @@ export interface GraphEdge {
   updatedAt?: string;
 }
 
+const prisma = new PrismaClient();
+
 class GraphService {
   private driver: Driver | null = null;
   private isNeo4jConnected = false;
 
-  // Fallback In-Memory Graph Data
+  // In-Memory Graph Data (mock seed + DB records merged)
   private mockNodes: Map<string, GraphNode> = new Map();
   private mockEdges: Map<string, GraphEdge> = new Map();
 
   constructor() {
     this.initializeNeo4j();
     this.seedDefaultMockData();
+    this.loadFromDatabase();
+  }
+
+  private async loadFromDatabase() {
+    try {
+      const [dbNodes, dbEdges] = await Promise.all([
+        prisma.node.findMany(),
+        prisma.edge.findMany()
+      ]);
+
+      dbNodes.forEach(n => {
+        let props: Record<string, any> = {};
+        try { props = JSON.parse(n.properties); } catch {}
+        this.mockNodes.set(n.id, {
+          id: n.id,
+          label: n.label,
+          type: n.type as GraphNode['type'],
+          properties: props,
+          createdAt: n.createdAt.toISOString(),
+          updatedAt: n.updatedAt.toISOString()
+        });
+      });
+
+      dbEdges.forEach(e => {
+        let props: Record<string, any> = {};
+        try { props = JSON.parse(e.properties); } catch {}
+        this.mockEdges.set(e.id, {
+          id: e.id,
+          sourceId: e.sourceId,
+          targetId: e.targetId,
+          type: e.type as GraphEdge['type'],
+          weight: e.weight,
+          properties: props,
+          createdAt: e.createdAt.toISOString(),
+          updatedAt: e.updatedAt.toISOString()
+        });
+      });
+
+      console.log(`[GraphService] Loaded ${dbNodes.length} nodes and ${dbEdges.length} edges from PostgreSQL.`);
+    } catch (err) {
+      console.warn('[GraphService] Could not load from PostgreSQL — running on mock data only.', err);
+    }
   }
 
   private async initializeNeo4j() {
@@ -41,7 +86,6 @@ class GraphService {
     if (uri && password) {
       try {
         this.driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
-        // Test connection
         await this.driver.verifyConnectivity();
         this.isNeo4jConnected = true;
         console.log('Neo4j Graph Database connected successfully.');
@@ -167,6 +211,22 @@ class GraphService {
     const id = node.id || `n_${Date.now()}`;
     const newNode: GraphNode = { ...node, id, properties: node.properties || {} };
 
+    // Persist to PostgreSQL
+    try {
+      const saved = await prisma.node.create({
+        data: {
+          id,
+          label: newNode.label,
+          type: newNode.type,
+          properties: JSON.stringify(newNode.properties)
+        }
+      });
+      newNode.createdAt = saved.createdAt.toISOString();
+      newNode.updatedAt = saved.updatedAt.toISOString();
+    } catch (err) {
+      console.warn('[GraphService] addNode: PostgreSQL write failed, stored in memory only.', err);
+    }
+
     if (this.isNeo4jConnected && this.driver) {
       const session = this.driver.session();
       try {
@@ -192,6 +252,21 @@ class GraphService {
       ...(updates.properties !== undefined ? { properties: { ...existing.properties, ...updates.properties } } : {}),
       updatedAt: new Date().toISOString()
     };
+
+    // Persist to PostgreSQL
+    try {
+      await prisma.node.update({
+        where: { id },
+        data: {
+          label: updated.label,
+          type: updated.type,
+          properties: JSON.stringify(updated.properties)
+        }
+      });
+    } catch (err) {
+      console.warn('[GraphService] updateNode: PostgreSQL update failed.', err);
+    }
+
     if (this.isNeo4jConnected && this.driver) {
       const session = this.driver.session();
       try {
@@ -208,6 +283,14 @@ class GraphService {
   }
 
   public async deleteNode(id: string): Promise<boolean> {
+    // Delete from PostgreSQL (cascade to edges via application logic)
+    try {
+      await prisma.edge.deleteMany({ where: { OR: [{ sourceId: id }, { targetId: id }] } });
+      await prisma.node.delete({ where: { id } });
+    } catch (err) {
+      console.warn('[GraphService] deleteNode: PostgreSQL delete failed.', err);
+    }
+
     if (this.isNeo4jConnected && this.driver) {
       const session = this.driver.session();
       try {
@@ -217,7 +300,7 @@ class GraphService {
       }
     }
     const existed = this.mockNodes.delete(id);
-    // Cascade delete edges
+    // Cascade delete edges in memory
     for (const [edgeId, edge] of this.mockEdges.entries()) {
       if (edge.sourceId === id || edge.targetId === id) {
         this.mockEdges.delete(edgeId);
@@ -254,6 +337,24 @@ class GraphService {
     const id = edge.id || `e_${Date.now()}`;
     const newEdge: GraphEdge = { ...edge, id, properties: edge.properties || {} };
 
+    // Persist to PostgreSQL
+    try {
+      const saved = await prisma.edge.create({
+        data: {
+          id,
+          sourceId: newEdge.sourceId,
+          targetId: newEdge.targetId,
+          type: newEdge.type,
+          weight: newEdge.weight,
+          properties: JSON.stringify(newEdge.properties)
+        }
+      });
+      newEdge.createdAt = saved.createdAt.toISOString();
+      newEdge.updatedAt = saved.updatedAt.toISOString();
+    } catch (err) {
+      console.warn('[GraphService] addEdge: PostgreSQL write failed, stored in memory only.', err);
+    }
+
     if (this.isNeo4jConnected && this.driver) {
       const session = this.driver.session();
       try {
@@ -287,6 +388,21 @@ class GraphService {
       ...(updates.properties !== undefined ? { properties: { ...existing.properties, ...updates.properties } } : {}),
       updatedAt: new Date().toISOString()
     };
+
+    // Persist to PostgreSQL
+    try {
+      await prisma.edge.update({
+        where: { id },
+        data: {
+          type: updated.type,
+          weight: updated.weight,
+          properties: JSON.stringify(updated.properties)
+        }
+      });
+    } catch (err) {
+      console.warn('[GraphService] updateEdge: PostgreSQL update failed.', err);
+    }
+
     if (this.isNeo4jConnected && this.driver) {
       const session = this.driver.session();
       try {
@@ -303,6 +419,13 @@ class GraphService {
   }
 
   public async deleteEdge(id: string): Promise<boolean> {
+    // Delete from PostgreSQL
+    try {
+      await prisma.edge.delete({ where: { id } });
+    } catch (err) {
+      console.warn('[GraphService] deleteEdge: PostgreSQL delete failed.', err);
+    }
+
     if (this.isNeo4jConnected && this.driver) {
       const session = this.driver.session();
       try {
@@ -315,6 +438,15 @@ class GraphService {
   }
 
   public async resetGraph(): Promise<void> {
+    // Clear PostgreSQL data (preserve mock seed IDs by only deleting DB-originated records)
+    try {
+      await prisma.edge.deleteMany();
+      await prisma.node.deleteMany();
+      console.log('[GraphService] Cleared all nodes and edges from PostgreSQL.');
+    } catch (err) {
+      console.warn('[GraphService] resetGraph: PostgreSQL clear failed.', err);
+    }
+
     if (this.isNeo4jConnected && this.driver) {
       const session = this.driver.session();
       try {
