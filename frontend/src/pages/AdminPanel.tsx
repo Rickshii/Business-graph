@@ -178,10 +178,10 @@ export default function AdminPanel() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit">
+      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-full overflow-x-auto scrollbar-none">
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeTab === tab.id ? 'bg-white text-indigo-600 shadow-soft-sm' : 'text-slate-400 hover:text-slate-700'}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${activeTab === tab.id ? 'bg-white text-indigo-600 shadow-soft-sm' : 'text-slate-400 hover:text-slate-700'}`}>
             {tab.icon}{tab.label}
           </button>
         ))}
@@ -248,7 +248,7 @@ export default function AdminPanel() {
               <input type="text" placeholder="Search by name or email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="input !pl-9 !py-2 text-xs" />
             </div>
           </div>
-          <div className="card overflow-hidden">
+          <div className="card overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>

@@ -5,6 +5,7 @@ import {
   ChevronDown, RefreshCw, Network, Link
 } from 'lucide-react';
 import { api } from '../services/api';
+import { MOCK_NODES, MOCK_EDGES } from '../services/mockData';
 
 const NODE_TYPES = ['ALL', 'BUSINESS', 'CUSTOMER', 'SUPPLIER', 'INFLUENCER', 'COMPETITOR', 'REVIEW'];
 const EDGE_TYPES = ['BUYS_FROM', 'SUPPLIES', 'INFLUENCES', 'COMPETES', 'REVIEWS'];
@@ -171,7 +172,11 @@ export default function Entities({ initialType = 'BUSINESS', setTab, onHighlight
       const [nodesRes, edgesRes] = await Promise.all([api.get('/graph/nodes'), api.get('/graph/edges')]);
       setNodes(nodesRes.data);
       setEdges(edgesRes.data);
-    } catch (e) { console.error('Failed to fetch entities:', e); }
+    } catch (e) {
+      console.warn('Backend offline — loading mock entity data.');
+      setNodes(MOCK_NODES);
+      setEdges(MOCK_EDGES);
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -301,7 +306,7 @@ export default function Entities({ initialType = 'BUSINESS', setTab, onHighlight
       </div>
 
       {/* Data Table */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <RefreshCw size={20} className="text-indigo-400 animate-spin" />

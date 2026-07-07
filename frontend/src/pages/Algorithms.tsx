@@ -169,20 +169,22 @@ export default function Algorithms({ initialAlgo = 'PAGERANK', setTab, onHighlig
               <div className="card p-6 md:col-span-2">
                 <h3 className="text-base font-bold text-slate-900 mb-1 font-display">Influence Leaderboard</h3>
                 <p className="text-xs text-slate-400 mb-5">Relative centrality scores mapped via the PageRank Algorithm.</p>
-                <table className="data-table">
-                  <thead><tr><th>Rank</th><th>Entity Name</th><th>Class</th><th>PageRank Score</th><th className="text-right">Actions</th></tr></thead>
-                  <tbody>
-                    {pageRank.map((item, idx) => (
-                      <tr key={item.id}>
-                        <td><span className="text-sm font-bold text-slate-400">#{idx + 1}</span></td>
-                        <td><div className="font-bold text-slate-800">{getNodeName(item.id)}</div><div className="text-[10px] text-slate-400 mt-0.5 font-mono">{item.id}</div></td>
-                        <td><span className={`badge ${getNodeType(item.id) === 'BUSINESS' ? 'badge-blue' : getNodeType(item.id) === 'CUSTOMER' ? 'badge-green' : 'badge-violet'}`}>{getNodeType(item.id)}</span></td>
-                        <td><span className="font-bold text-indigo-600">{(item.score * 100).toFixed(3)}%</span></td>
-                        <td className="text-right"><button onClick={() => { setTab('explorer'); onHighlightNodes([item.id]); }} className="btn-secondary !py-1.5 !px-2.5 text-xs">Explore</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead><tr><th>Rank</th><th>Entity Name</th><th>Class</th><th>PageRank Score</th><th className="text-right">Actions</th></tr></thead>
+                    <tbody>
+                      {pageRank.map((item, idx) => (
+                        <tr key={item.id}>
+                          <td><span className="text-sm font-bold text-slate-400">#{idx + 1}</span></td>
+                          <td><div className="font-bold text-slate-800">{getNodeName(item.id)}</div><div className="text-[10px] text-slate-400 mt-0.5 font-mono">{item.id}</div></td>
+                          <td><span className={`badge ${getNodeType(item.id) === 'BUSINESS' ? 'badge-blue' : getNodeType(item.id) === 'CUSTOMER' ? 'badge-green' : 'badge-violet'}`}>{getNodeType(item.id)}</span></td>
+                          <td><span className="font-bold text-indigo-600">{(item.score * 100).toFixed(3)}%</span></td>
+                          <td className="text-right"><button onClick={() => { setTab('explorer'); onHighlightNodes([item.id]); }} className="btn-secondary !py-1.5 !px-2.5 text-xs">Explore</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
               <div className="card p-6 flex flex-col justify-between">
                 <div>
@@ -287,20 +289,22 @@ export default function Algorithms({ initialAlgo = 'PAGERANK', setTab, onHighlig
             <div className="card p-6 max-w-4xl mx-auto">
               <h3 className="text-base font-bold text-slate-900 mb-1 font-display">Alliance Recommendations</h3>
               <p className="text-xs text-slate-400 mb-5">Alliance opportunities calculated via mutual neighbors Jaccard Coefficients.</p>
-              <table className="data-table">
-                <thead><tr><th>Recommended Partners</th><th>Match Strength</th><th>Mutual Connections</th><th className="text-right">Action</th></tr></thead>
-                <tbody>
-                  {partnerships.map((p, idx) => (
-                    <tr key={idx}>
-                      <td><div className="flex items-center gap-2 text-xs font-bold text-slate-800"><span>{getNodeName(p.sourceId)}</span><span className="text-slate-300">&</span><span>{getNodeName(p.targetId)}</span></div></td>
-                      <td><div className="flex items-center gap-2"><span className="font-bold text-indigo-600 text-sm">{Math.round(p.score * 100)}%</span><div className="progress-bar w-20"><div className="progress-fill bg-indigo-500" style={{ width: `${p.score * 100}%` }}></div></div></div></td>
-                      <td className="text-slate-500 text-xs font-medium">{p.commonNeighbors.join(', ')}</td>
-                      <td className="text-right"><button onClick={() => { setTab('explorer'); onHighlightNodes([p.sourceId, p.targetId]); }} className="btn-secondary !py-1 !px-2.5 text-xs">Map Links</button></td>
-                    </tr>
-                  ))}
-                  {partnerships.length === 0 && <tr><td colSpan={4} className="text-center py-12 text-slate-400">Add shared suppliers or customers to generate alliance scores.</td></tr>}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead><tr><th>Recommended Partners</th><th>Match Strength</th><th>Mutual Connections</th><th className="text-right">Action</th></tr></thead>
+                  <tbody>
+                    {partnerships.map((p, idx) => (
+                      <tr key={idx}>
+                        <td><div className="flex items-center gap-2 text-xs font-bold text-slate-800"><span>{getNodeName(p.sourceId)}</span><span className="text-slate-300">&</span><span>{getNodeName(p.targetId)}</span></div></td>
+                        <td><div className="flex items-center gap-2"><span className="font-bold text-indigo-600 text-sm">{Math.round(p.score * 100)}%</span><div className="progress-bar w-20"><div className="progress-fill bg-indigo-500" style={{ width: `${p.score * 100}%` }}></div></div></div></td>
+                        <td className="text-slate-500 text-xs font-medium">{p.commonNeighbors.join(', ')}</td>
+                        <td className="text-right"><button onClick={() => { setTab('explorer'); onHighlightNodes([p.sourceId, p.targetId]); }} className="btn-secondary !py-1 !px-2.5 text-xs">Map Links</button></td>
+                      </tr>
+                    ))}
+                    {partnerships.length === 0 && <tr><td colSpan={4} className="text-center py-12 text-slate-400">Add shared suppliers or customers to generate alliance scores.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -345,26 +349,28 @@ export default function Algorithms({ initialAlgo = 'PAGERANK', setTab, onHighlig
               <div className="card p-6 md:col-span-2">
                 <h3 className="text-base font-bold text-slate-900 mb-1 font-display">Market Dominance Shares</h3>
                 <p className="text-xs text-slate-400 mb-5">Competitor network strength calculated by direct BUYS_FROM customer relations.</p>
-                <table className="data-table">
-                  <thead><tr><th>Brand Name</th><th>Customer Connections</th><th>Relative Market Share</th></tr></thead>
-                  <tbody>
-                    {dominance.map((d, i) => (
-                      <tr key={i}>
-                        <td><span className="font-bold text-slate-800">{d.name}</span></td>
-                        <td><span className="font-medium text-slate-500">{d.nodeCount} active links</span></td>
-                        <td>
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold text-slate-900 text-sm">{d.marketShare}%</span>
-                            <div className="progress-bar flex-1 max-w-[100px]">
-                              <div className="progress-fill" style={{ width: `${d.marketShare}%`, backgroundColor: COLORS[i % COLORS.length] }}></div>
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead><tr><th>Brand Name</th><th>Customer Connections</th><th>Relative Market Share</th></tr></thead>
+                    <tbody>
+                      {dominance.map((d, i) => (
+                        <tr key={i}>
+                          <td><span className="font-bold text-slate-800">{d.name}</span></td>
+                          <td><span className="font-medium text-slate-500">{d.nodeCount} active links</span></td>
+                          <td>
+                            <div className="flex items-center gap-3">
+                              <span className="font-bold text-slate-900 text-sm">{d.marketShare}%</span>
+                              <div className="progress-bar flex-1 max-w-[100px]">
+                                <div className="progress-fill" style={{ width: `${d.marketShare}%`, backgroundColor: COLORS[i % COLORS.length] }}></div>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {dominance.length === 0 && <tr><td colSpan={3} className="text-center py-12 text-slate-400">No dominance data available. Add competitor links.</td></tr>}
-                  </tbody>
-                </table>
+                          </td>
+                        </tr>
+                      ))}
+                      {dominance.length === 0 && <tr><td colSpan={3} className="text-center py-12 text-slate-400">No dominance data available. Add competitor links.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
               <div className="card p-6">
                 <h3 className="text-base font-bold text-slate-900 mb-1 font-display">Modality Analysis</h3>

@@ -80,9 +80,9 @@ export default function AIChat({ setTab, onHighlightNodes }: { setTab: (tab: str
   };
 
   return (
-    <div className="h-[calc(100vh-160px)] flex gap-5 animate-slide-up">
+    <div className="flex flex-col lg:flex-row gap-5 animate-slide-up h-auto lg:h-[calc(100vh-160px)]">
       {/* Chat Window */}
-      <div className="flex-grow card flex flex-col h-full overflow-hidden">
+      <div className="h-[60vh] lg:h-full flex-grow card flex flex-col overflow-hidden">
         {/* Chat Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
           <div className="flex items-center gap-3">
@@ -180,7 +180,7 @@ export default function AIChat({ setTab, onHighlightNodes }: { setTab: (tab: str
       </div>
 
       {/* Sidebar — Query Suggestions */}
-      <div className="w-72 card p-5 h-full overflow-y-auto space-y-5 shrink-0">
+      <div className="w-full lg:w-72 card p-5 h-auto lg:h-full lg:overflow-y-auto space-y-5 shrink-0">
         <div>
           <h3 className="text-sm font-bold text-slate-900 font-display flex items-center gap-2 mb-2">
             <HelpCircle size={14} className="text-indigo-500" /> Query Suggestions

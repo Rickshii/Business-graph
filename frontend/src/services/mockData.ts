@@ -164,3 +164,18 @@ export const MOCK_PATHFIND = [
   ['n12', 'n1', 'n6']
 ];
 
+export const MOCK_PIE = [
+  { name: 'Businesses', value: 2 },
+  { name: 'Customers', value: 2 },
+  { name: 'Suppliers', value: 3 },
+  { name: 'Influencers', value: 1 },
+  { name: 'Competitors', value: 2 },
+  { name: 'Reviews', value: 2 },
+];
+
+export const MOCK_FRAUD_ALERTS = [
+  { id: 'fraud_0', title: 'Circular Loop Risk Detected', message: 'Apex Tech Solutions → CloudBase Systems → Apex Tech Solutions cycle flagged.', type: 'danger', nodeIds: ['n1', 'n3'] },
+  { id: 'risk_n5', title: 'High Risk Entity Flagged', message: '"DataEdge Corp" (COMPETITOR) has a risk score of 74%.', type: 'warning', nodeIds: ['n5'] },
+  { id: 'risk_n1', title: 'High Risk Entity Flagged', message: '"Apex Tech Solutions" (BUSINESS) has a risk score of 61%.', type: 'warning', nodeIds: ['n1'] }
+];
+

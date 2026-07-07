@@ -135,7 +135,7 @@ export default function Settings() {
                 Profile Information
               </h3>
               <form onSubmit={handleSaveProfile} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Full Name</label>
                     <input type="text" value={name} onChange={e => setName(e.target.value)} className="input" placeholder="Your full name" />

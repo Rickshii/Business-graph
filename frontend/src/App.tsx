@@ -43,7 +43,7 @@ export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('brgi_token'));
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 1024);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -62,6 +62,19 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[]>([]);
+
+  // Automatically adjust sidebar on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarCollapsed(true);
+      } else {
+        setSidebarCollapsed(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Load user — try real API first, fall back to localStorage/mock token
   useEffect(() => {
@@ -296,6 +309,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] font-sans">
+      {/* Mobile Sidebar Overlay Backdrop */}
+      {!sidebarCollapsed && (
+        <div 
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-30 lg:hidden" 
+          onClick={() => setSidebarCollapsed(true)} 
+        />
+      )}
+
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -309,7 +330,7 @@ export default function App() {
           {navItems.map(item => {
             if (item.requireAdmin && user.role !== 'ADMIN') return null;
             return (
-              <button key={item.id} onClick={() => { setActiveTab(item.id); if (item.id !== 'explorer') setHighlightedNodeIds([]); }}
+              <button key={item.id} onClick={() => { setActiveTab(item.id); if (item.id !== 'explorer') setHighlightedNodeIds([]); if (window.innerWidth < 1024) setSidebarCollapsed(true); }}
                 title={item.label}
                 className={activeTab === item.id ? 'nav-item-active w-full' : 'nav-item w-full'}>
                 <div className="shrink-0">{item.icon}</div>
@@ -347,11 +368,11 @@ export default function App() {
               <Menu size={18} />
             </button>
             {/* Global Search */}
-            <div className="max-w-md w-80 relative">
+            <div className="max-w-md w-32 sm:w-48 md:w-80 relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search entities, nodes, or algorithms..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) { setActiveTab('aichat'); setShowSearchResults(false); } if (e.key === 'Escape') { setSearchQuery(''); setShowSearchResults(false); } }}

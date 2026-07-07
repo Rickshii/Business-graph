@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts';
 import { Network, Link, AlertTriangle, Cpu, TrendingUp, Users, ArrowUpRight, ShieldAlert, Activity, RefreshCw, Download } from 'lucide-react';
 import { api } from '../services/api';
+import { MOCK_STATS, MOCK_TREND, MOCK_PAGERANK, MOCK_DOMINANCE, MOCK_PIE, MOCK_FRAUD_ALERTS } from '../services/mockData';
 
 const PASTEL_COLORS = ['#6366F1', '#10B981', '#8B5CF6', '#06B6D4', '#F43F5E', '#F59E0B'];
 
@@ -106,7 +107,13 @@ export default function Dashboard({ setTab, onHighlightNodes }: { setTab: (tab: 
       });
       setFraudAlerts(alerts);
     } catch (err) {
-      console.error('Dashboard data fetch failed:', err);
+      console.warn('Backend offline — loading mock dashboard data.');
+      setStats(MOCK_STATS as any);
+      setTrendData(MOCK_TREND);
+      setPageRankScores(MOCK_PAGERANK);
+      setDominance(MOCK_DOMINANCE);
+      setPieData(MOCK_PIE);
+      setFraudAlerts(MOCK_FRAUD_ALERTS);
     } finally {
       setLoading(false);
       setRefreshing(false);

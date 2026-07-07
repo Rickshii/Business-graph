@@ -162,9 +162,9 @@ export default function GraphExplorer({ highlightedNodeIds, onClearHighlights }:
   };
 
   return (
-    <div className="h-[calc(100vh-160px)] flex gap-5 animate-slide-up relative">
+    <div className="flex flex-col lg:flex-row gap-5 animate-slide-up relative h-auto lg:h-[calc(100vh-160px)]">
       {/* React Flow Canvas */}
-      <div className="flex-grow bg-white border border-slate-100 rounded-3xl overflow-hidden relative shadow-soft-md">
+      <div className="h-[50vh] lg:h-full flex-grow bg-white border border-slate-100 rounded-3xl overflow-hidden relative shadow-soft-md shrink-0 lg:shrink">
         {highlightedNodeIds.length > 0 && (
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-900 px-3.5 py-2 rounded-xl shadow-soft-sm animate-fade-in">
             <span className="text-xs font-bold">Highlighting AI recommendation network</span>
@@ -206,7 +206,7 @@ export default function GraphExplorer({ highlightedNodeIds, onClearHighlights }:
       </div>
 
       {/* Right Sidebar */}
-      <div className="w-76 flex flex-col gap-4 h-full overflow-y-auto scrollbar-thin" style={{ width: 300 }}>
+      <div className="w-full lg:w-[300px] flex flex-col gap-4 h-auto lg:h-full lg:overflow-y-auto scrollbar-thin shrink-0">
         {/* Entity Inspector */}
         <div className="card p-5">
           <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 font-display flex items-center gap-2 mb-4">
