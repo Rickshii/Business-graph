@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { icon: <Bell size={14} />, label: 'Notification Alerts', id: 'notifications' },
 ];
 
-export default function Settings() {
+export default function Settings({ onUserUpdate }: { onUserUpdate?: (user: any) => void }) {
   const [activeSection, setActiveSection] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -43,21 +43,32 @@ export default function Settings() {
 
   const showSuccess = () => {
     setSaved(true); setError('');
-    setTimeout(() => setSaved(false), 3000);
+    setTimeout(() => setSaved(false), 4000);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError('Name cannot be empty.');
+    if (name.trim().length < 2) return setError('Name must be at least 2 characters.');
     setSaving(true); setError('');
     try {
       const res = await api.put('/auth/profile', { name: name.trim() });
+      const updatedUser = res.data.user;
+      // Refresh JWT token if backend issued a new one
       if (res.data.token) {
         localStorage.setItem('brgi_token', res.data.token);
       }
+      // Update cached user object so sidebar/topbar refreshes immediately
+      if (updatedUser) {
+        const existing = JSON.parse(localStorage.getItem('brgi_user') || '{}');
+        const merged = { ...existing, ...updatedUser };
+        localStorage.setItem('brgi_user', JSON.stringify(merged));
+        setName(merged.name || name);
+        onUserUpdate?.(merged);
+      }
       showSuccess();
     } catch (e: any) {
-      setError(e.response?.data?.error || 'Profile update failed.');
+      setError(e.response?.data?.error || 'Profile update failed. Please try again.');
     } finally { setSaving(false); }
   };
 
@@ -68,7 +79,17 @@ export default function Settings() {
     if (newPassword !== confirmPassword) return setError('New passwords do not match.');
     setSaving(true); setError('');
     try {
-      await api.put('/auth/profile', { currentPassword, newPassword });
+      const res = await api.put('/auth/profile', { currentPassword, newPassword });
+      // Refresh token if provided
+      if (res.data.token) {
+        localStorage.setItem('brgi_token', res.data.token);
+      }
+      if (res.data.user) {
+        const existing = JSON.parse(localStorage.getItem('brgi_user') || '{}');
+        const merged = { ...existing, ...res.data.user };
+        localStorage.setItem('brgi_user', JSON.stringify(merged));
+        onUserUpdate?.(merged);
+      }
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
       showSuccess();
     } catch (e: any) {

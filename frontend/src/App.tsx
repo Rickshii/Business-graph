@@ -198,6 +198,11 @@ export default function App() {
     setToken(null); setUser(null);
   };
 
+  const handleUserUpdate = (updatedUser: any) => {
+    setUser(updatedUser);
+    localStorage.setItem('brgi_user', JSON.stringify(updatedUser));
+  };
+
   const handleHighlightNodes = (nodeIds: string[]) => {
     setHighlightedNodeIds(nodeIds);
     setActiveTab('explorer');
@@ -472,7 +477,7 @@ export default function App() {
         {activeTab === 'aichat' && <AIChat setTab={setActiveTab} onHighlightNodes={handleHighlightNodes} />}
         {activeTab === 'reports' && <Reports />}
         {activeTab === 'admin' && <AdminPanel />}
-        {activeTab === 'settings' && <Settings />}
+        {activeTab === 'settings' && <Settings onUserUpdate={handleUserUpdate} />}
       </main>
     </div>
   );

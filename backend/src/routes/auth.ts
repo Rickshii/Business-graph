@@ -112,51 +112,84 @@ router.put('/profile', authMiddleware, async (req: AuthenticatedRequest, res) =>
   const userId = req.user?.id;
   const { name, currentPassword, newPassword } = req.body;
 
-  if (!name && !newPassword) {
-    return res.status(400).json({ error: 'Nothing to update' });
+  // Validate: at least one field must be changing
+  const trimmedName = name?.trim();
+  if (!trimmedName && !newPassword) {
+    return res.status(400).json({ error: 'Nothing to update. Provide a name or a new password.' });
+  }
+  if (trimmedName !== undefined && trimmedName.length < 2) {
+    return res.status(400).json({ error: 'Name must be at least 2 characters.' });
+  }
+  if (newPassword && newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+  }
+  if (newPassword && !currentPassword) {
+    return res.status(400).json({ error: 'Current password is required to change password.' });
   }
 
-  try {
-    const updateData: any = {};
-    if (name) updateData.name = name;
-    if (newPassword) {
-      if (!currentPassword) return res.status(400).json({ error: 'Current password required to change password' });
-      // Try Prisma
-      try {
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user || !bcrypt.compareSync(currentPassword, user.passwordHash)) {
-          return res.status(400).json({ error: 'Current password is incorrect' });
-        }
-        updateData.passwordHash = bcrypt.hashSync(newPassword, 10);
-      } catch {
-        // Fallback to mock store
-        const mockUser = mockUsers.find(u => u.id === userId);
-        if (!mockUser || !bcrypt.compareSync(currentPassword, mockUser.passwordHash)) {
-          return res.status(400).json({ error: 'Current password is incorrect' });
-        }
-        if (name) mockUser.name = name;
-        if (newPassword) mockUser.passwordHash = bcrypt.hashSync(newPassword, 10);
-        return res.json({ success: true, user: { id: mockUser.id, email: mockUser.email, role: mockUser.role, name: mockUser.name } });
-      }
-    }
+  // ── Step 1: Find the user (Prisma first, mock fallback) ────────────────────
+  let dbUser: any = null;
+  let usingMock = false;
 
-    try {
-      const updated = await prisma.user.update({ where: { id: userId }, data: updateData });
-      const token = jwt.sign({ id: updated.id, email: updated.email, role: updated.role, name: updated.name }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({ success: true, token, user: { id: updated.id, email: updated.email, role: updated.role, name: updated.name } });
-    } catch {
-      // Fallback
-      const mockUser = mockUsers.find(u => u.id === userId);
-      if (mockUser) {
-        if (name) mockUser.name = name;
-        if (updateData.passwordHash) mockUser.passwordHash = updateData.passwordHash;
-        const token = jwt.sign({ id: mockUser.id, email: mockUser.email, role: mockUser.role, name: mockUser.name }, JWT_SECRET, { expiresIn: '7d' });
-        return res.json({ success: true, token, user: { id: mockUser.id, email: mockUser.email, role: mockUser.role, name: mockUser.name } });
-      }
-      return res.status(404).json({ error: 'User not found' });
+  try {
+    dbUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!dbUser) {
+      // DB is live but user not found — check mocks (e.g. demo accounts)
+      dbUser = mockUsers.find(u => u.id === userId) || null;
+      usingMock = !!dbUser;
     }
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch {
+    // DB offline — fall back to mock store
+    dbUser = mockUsers.find(u => u.id === userId) || null;
+    usingMock = true;
+  }
+
+  if (!dbUser) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  // ── Step 2: Validate current password if changing password ─────────────────
+  if (newPassword) {
+    const passwordField = usingMock ? dbUser.passwordHash : dbUser.passwordHash;
+    if (!bcrypt.compareSync(currentPassword, passwordField)) {
+      return res.status(400).json({ error: 'Current password is incorrect.' });
+    }
+  }
+
+  // ── Step 3: Build update payload ───────────────────────────────────────────
+  const updateData: any = {};
+  if (trimmedName) updateData.name = trimmedName;
+  if (newPassword) updateData.passwordHash = bcrypt.hashSync(newPassword, 10);
+
+  // ── Step 4: Persist changes ────────────────────────────────────────────────
+  if (usingMock) {
+    // Write to in-memory mock store
+    if (trimmedName) dbUser.name = trimmedName;
+    if (updateData.passwordHash) dbUser.passwordHash = updateData.passwordHash;
+    const token = jwt.sign(
+      { id: dbUser.id, email: dbUser.email, role: dbUser.role, name: dbUser.name },
+      JWT_SECRET, { expiresIn: '7d' }
+    );
+    return res.json({
+      success: true, token,
+      user: { id: dbUser.id, email: dbUser.email, role: dbUser.role, name: dbUser.name }
+    });
+  }
+
+  // Persist to PostgreSQL
+  try {
+    const updated = await prisma.user.update({ where: { id: userId }, data: updateData });
+    const token = jwt.sign(
+      { id: updated.id, email: updated.email, role: updated.role, name: updated.name },
+      JWT_SECRET, { expiresIn: '7d' }
+    );
+    return res.json({
+      success: true, token,
+      user: { id: updated.id, email: updated.email, role: updated.role, name: updated.name }
+    });
+  } catch (dbErr: any) {
+    console.error('[Auth] Prisma profile update error:', dbErr?.message);
+    return res.status(500).json({ error: 'Database write failed. Please try again.' });
   }
 });
 
