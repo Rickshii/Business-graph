@@ -6,6 +6,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Plus, Trash2, RefreshCw, Layers, HelpCircle, Building, Users, Truck, MessageSquare, Flame, TrendingUp } from 'lucide-react';
 import { api } from '../services/api';
+import { MOCK_NODES, MOCK_EDGES } from '../services/mockData';
 
 const NODE_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   BUSINESS:   { bg: '#EEF2FF', border: '#C7D2FE', text: '#4338CA', badge: '#6366F1' },
@@ -92,7 +93,10 @@ export default function GraphExplorer({ highlightedNodeIds, onClearHighlights }:
     try {
       const [nRes, eRes] = await Promise.all([api.get('/graph/nodes'), api.get('/graph/edges')]);
       setRawNodes(nRes.data); setRawEdges(eRes.data);
-    } catch (err) { console.error('Failed to load graph data:', err); }
+    } catch (err) {
+      console.warn('Backend offline — loading mock graph dataset.');
+      setRawNodes(MOCK_NODES); setRawEdges(MOCK_EDGES);
+    }
   }, []);
 
   useEffect(() => { loadGraphData(); }, [loadGraphData, highlightedNodeIds]);
@@ -120,9 +124,14 @@ export default function GraphExplorer({ highlightedNodeIds, onClearHighlights }:
     if (!newNodeName.trim()) return;
     try {
       const res = await api.post('/graph/nodes', { label: newNodeName, type: newNodeType, properties: { sector: 'Tech SaaS', createdAt: new Date().toISOString() } });
-      setRawNodes(prev => [...prev, res.data]); setNewNodeName('');
+      setRawNodes(prev => [...prev, res.data]);
       api.post('/admin/logs', { action: 'NODE_ADD', details: `Added node: ${newNodeName} (${newNodeType})` });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.warn('Backend offline — adding node locally.');
+      const localNode = { id: `local_n_${Date.now()}`, label: newNodeName, type: newNodeType, properties: { sector: 'Tech SaaS', createdAt: new Date().toISOString() } };
+      setRawNodes(prev => [...prev, localNode]);
+    }
+    setNewNodeName('');
   };
 
   const handleAddEdge = async (e: React.FormEvent) => {
@@ -132,18 +141,24 @@ export default function GraphExplorer({ highlightedNodeIds, onClearHighlights }:
       const res = await api.post('/graph/edges', { sourceId: newEdgeSource, targetId: newEdgeTarget, type: newEdgeType, weight: 1.0, properties: {} });
       setRawEdges(prev => [...prev, res.data]);
       api.post('/admin/logs', { action: 'EDGE_ADD', details: `Connected: ${newEdgeSource} to ${newEdgeTarget} via ${newEdgeType}` });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.warn('Backend offline — adding relationship locally.');
+      const localEdge = { id: `local_e_${Date.now()}`, sourceId: newEdgeSource, targetId: newEdgeTarget, type: newEdgeType, weight: 1.0, properties: {} };
+      setRawEdges(prev => [...prev, localEdge]);
+    }
   };
 
   const handleDeleteNode = async (nodeId: string) => {
     if (!window.confirm('Delete this entity and all associated links?')) return;
     try {
       await api.delete(`/graph/nodes/${nodeId}`);
-      setRawNodes(prev => prev.filter(n => n.id !== nodeId));
-      setRawEdges(prev => prev.filter(e => e.sourceId !== nodeId && e.targetId !== nodeId));
-      setSelectedNode(null);
       api.post('/admin/logs', { action: 'NODE_DELETE', details: `Removed node: ${nodeId}` });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.warn('Backend offline — removing node locally.');
+    }
+    setRawNodes(prev => prev.filter(n => n.id !== nodeId));
+    setRawEdges(prev => prev.filter(e => e.sourceId !== nodeId && e.targetId !== nodeId));
+    setSelectedNode(null);
   };
 
   return (

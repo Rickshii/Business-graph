@@ -8,6 +8,7 @@ import {
   AlertTriangle, FileText, Activity, Award, Star
 } from 'lucide-react';
 import { api } from '../services/api';
+import { MOCK_REPORT } from '../services/mockData';
 
 const COLORS = ['#6366F1', '#10B981', '#8B5CF6', '#06B6D4', '#F43F5E', '#F59E0B'];
 
@@ -21,7 +22,10 @@ export default function Reports() {
     try {
       const res = await api.get('/reports/summary');
       setReport(res.data);
-    } catch (e) { console.error('Report fetch failed:', e); }
+    } catch (e) {
+      console.warn('Backend offline — loading mock report summary.');
+      setReport(MOCK_REPORT);
+    }
     finally { setLoading(false); }
   }, []);
 
