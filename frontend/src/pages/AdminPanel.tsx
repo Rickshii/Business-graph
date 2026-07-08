@@ -39,6 +39,12 @@ export default function AdminPanel() {
   const [reseeding, setReseeding] = useState(false);
   const [reseedMsg, setReseedMsg] = useState('');
   const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCompany, setEditCompany] = useState('');
   const [newNotif, setNewNotif] = useState({ title: '', message: '', type: 'INFO' });
   const [sendingNotif, setSendingNotif] = useState(false);
 
@@ -91,24 +97,45 @@ export default function AdminPanel() {
     if (!editUser) return;
     setSavingUser(true);
     try {
-      await api.put(`/admin/users/${editUser.id}`, { role: editRole, status: editStatus });
+      const res = await api.put(`/admin/users/${editUser.id}`, {
+        name: editName,
+        role: editRole,
+        status: editStatus,
+        phone: editPhone,
+        company: editCompany
+      });
+      setUsers(prev => prev.map(u => u.id === editUser.id ? res.data : u));
     } catch (e: any) {
-      console.warn('Backend offline — updating user locally.');
+      console.warn('Failed to update user in backend, updating locally:', e?.response?.data?.error || e.message);
+      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: editName, role: editRole, status: editStatus, phone: editPhone, company: editCompany } : u));
+    } finally {
+      setEditUser(null);
+      setSavingUser(false);
     }
-    setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, role: editRole, status: editStatus } : u));
-    setEditUser(null);
-    setSavingUser(false);
+  };
+
+  const handleToggleStatus = async (user: any) => {
+    const newStatus = user.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+    try {
+      const res = await api.put(`/admin/users/${user.id}`, { status: newStatus });
+      setUsers(prev => prev.map(u => u.id === user.id ? res.data : u));
+    } catch (e: any) {
+      console.error('Failed to toggle status on backend:', e?.response?.data?.error || e.message);
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
+    }
   };
 
   const handleDeleteUser = async () => {
     if (!deleteUser) return;
     try {
       await api.delete(`/admin/users/${deleteUser.id}`);
+      setUsers(prev => prev.filter(u => u.id !== deleteUser.id));
     } catch (e: any) {
       console.warn('Backend offline — deleting user locally.');
+      setUsers(prev => prev.filter(u => u.id !== deleteUser.id));
+    } finally {
+      setDeleteUser(null);
     }
-    setUsers(prev => prev.filter(u => u.id !== deleteUser.id));
-    setDeleteUser(null);
   };
 
   const handleSendNotif = async () => {
@@ -143,11 +170,32 @@ export default function AdminPanel() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const filteredUsers = users.filter(u =>
-    !userSearch ||
-    u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email?.toLowerCase().includes(userSearch.toLowerCase())
+  const filteredUsers = users.filter(u => {
+    const searchLower = userSearch.toLowerCase();
+    const matchesSearch = !userSearch ||
+      u.name?.toLowerCase().includes(searchLower) ||
+      u.email?.toLowerCase().includes(searchLower) ||
+      u.phone?.toLowerCase().includes(searchLower) ||
+      u.company?.toLowerCase().includes(searchLower) ||
+      u.role?.toLowerCase().includes(searchLower);
+
+    const matchesRole = !userRoleFilter || u.role === userRoleFilter;
+    const matchesStatus = !userStatusFilter || u.status === userStatusFilter;
+
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
+  const itemsPerPage = 8;
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
+
+  // Reset page when filtering
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [userSearch, userRoleFilter, userStatusFilter]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <Activity size={15} /> },
@@ -241,48 +289,120 @@ export default function AdminPanel() {
 
       {/* ── Users ── */}
       {activeTab === 'users' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
+        <div className="space-y-4 animate-slide-up">
+          {/* Search and Filters */}
+          <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder="Search by name or email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} className="input !pl-9 !py-2 text-xs" />
+              <input
+                type="text"
+                placeholder="Search by name, email, phone, company, or role..."
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                className="input !pl-9 !py-2 text-xs w-full"
+              />
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <select
+                value={userRoleFilter}
+                onChange={e => setUserRoleFilter(e.target.value)}
+                className="input !py-1 px-3 text-xs w-32 bg-white"
+              >
+                <option value="">All Roles</option>
+                <option value="ADMIN">ADMIN</option>
+                <option value="ANALYST">ANALYST</option>
+                <option value="VIEWER">VIEWER</option>
+              </select>
+              <select
+                value={userStatusFilter}
+                onChange={e => setUserStatusFilter(e.target.value)}
+                className="input !py-1 px-3 text-xs w-32 bg-white"
+              >
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="SUSPENDED">SUSPENDED</option>
+              </select>
             </div>
           </div>
-          <div className="card overflow-x-auto">
+
+          {/* Table */}
+          <div className="card overflow-x-auto shadow-soft-sm rounded-2xl border border-slate-100 bg-white">
             <table className="data-table">
               <thead>
                 <tr>
                   <th>User</th>
                   <th>Email</th>
                   <th>Role</th>
-                  <th>Status</th>
+                  <th>Phone</th>
+                  <th>Company</th>
                   <th>Joined</th>
+                  <th>Status</th>
+                  <th>Last Login</th>
                   <th className="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map(user => (
-                  <tr key={user.id}>
+                {paginatedUsers.map(user => (
+                  <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="font-semibold text-slate-800">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
                           {user.name?.charAt(0) || '?'}
                         </div>
-                        {user.name}
+                        <span className="truncate max-w-[150px]" title={user.name}>{user.name}</span>
                       </div>
                     </td>
-                    <td className="text-xs text-slate-500">{user.email}</td>
-                    <td><span className={`badge ${ROLE_COLORS[user.role] || 'badge-slate'} text-[10px]`}>{user.role}</span></td>
-                    <td><span className={`badge ${STATUS_COLORS[user.status] || 'badge-slate'} text-[10px]`}>{user.status}</span></td>
-                    <td className="text-xs text-slate-400">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</td>
+                    <td className="text-xs text-slate-500 font-medium">{user.email}</td>
                     <td>
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => { setEditUser(user); setEditRole(user.role); setEditStatus(user.status); }}
-                          className="text-slate-400 hover:text-amber-600 p-1.5 rounded-lg hover:bg-amber-50 cursor-pointer" title="Edit">
+                      <span className={`badge ${ROLE_COLORS[user.role] || 'badge-slate'} text-[9px] font-extrabold px-2 py-0.5`}>
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="text-xs text-slate-500 font-mono">{user.phone || '—'}</td>
+                    <td className="text-xs text-slate-600 font-semibold truncate max-w-[120px]" title={user.company}>{user.company || '—'}</td>
+                    <td className="text-xs text-slate-400 font-medium">
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                    </td>
+                    <td>
+                      <span className={`badge ${STATUS_COLORS[user.status] || 'badge-slate'} text-[9px] font-extrabold px-2 py-0.5`}>
+                        {user.status}
+                      </span>
+                    </td>
+                    <td className="text-xs text-slate-400 font-medium">
+                      {user.lastLogin ? new Date(user.lastLogin).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                    </td>
+                    <td>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleToggleStatus(user)}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                            user.status === 'ACTIVE'
+                              ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                              : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                          }`}
+                          title={user.status === 'ACTIVE' ? 'Suspend User' : 'Activate User'}
+                        >
+                          {user.status === 'ACTIVE' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditUser(user);
+                            setEditRole(user.role);
+                            setEditStatus(user.status);
+                            setEditName(user.name || '');
+                            setEditPhone(user.phone || '');
+                            setEditCompany(user.company || '');
+                          }}
+                          className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-indigo-50 cursor-pointer transition-colors"
+                          title="Edit Profile"
+                        >
                           <Edit3 size={14} />
                         </button>
-                        <button onClick={() => setDeleteUser(user)}
-                          className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer" title="Delete">
+                        <button
+                          onClick={() => setDeleteUser(user)}
+                          className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                          title="Delete User"
+                        >
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -290,11 +410,47 @@ export default function AdminPanel() {
                   </tr>
                 ))}
                 {filteredUsers.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-10 text-slate-400 text-sm">No users found.</td></tr>
+                  <tr>
+                    <td colSpan={9} className="text-center py-12 text-slate-400 text-sm font-medium">
+                      No registered users found.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-150 pt-4 px-1">
+              <p className="text-xs text-slate-400">
+                Showing <span className="font-semibold text-slate-700">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                <span className="font-semibold text-slate-700">
+                  {Math.min(currentPage * itemsPerPage, filteredUsers.length)}
+                </span>{' '}
+                of <span className="font-semibold text-slate-700">{filteredUsers.length}</span> registered users
+              </p>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="btn-secondary !py-1 !px-2.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-1 text-[11px] text-slate-500 font-bold px-2">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="btn-secondary !py-1 !px-2.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -375,28 +531,61 @@ export default function AdminPanel() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-slide-up">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900">Edit User — {editUser.name}</h2>
+              <h2 className="text-sm font-bold text-slate-900 font-display">Edit User Profile</h2>
               <button onClick={() => setEditUser(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={18} /></button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Role</label>
-                <select value={editRole} onChange={e => setEditRole(e.target.value)} className="input text-sm">
-                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Full Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="input text-sm"
+                  placeholder="Full Name"
+                  required
+                />
               </div>
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Status</label>
-                <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="input text-sm">
-                  {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Phone Number</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={e => setEditPhone(e.target.value)}
+                  className="input text-sm"
+                  placeholder="Phone Number"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Company</label>
+                <input
+                  type="text"
+                  value={editCompany}
+                  onChange={e => setEditCompany(e.target.value)}
+                  className="input text-sm"
+                  placeholder="Company"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Role</label>
+                  <select value={editRole} onChange={e => setEditRole(e.target.value)} className="input text-sm">
+                    {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Status</label>
+                  <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="input text-sm">
+                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setEditUser(null)} className="btn-secondary flex-1 justify-center">Cancel</button>
               <button onClick={handleSaveUser} disabled={savingUser} className="btn-primary flex-1 justify-center">
                 {savingUser ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                Save
+                Save Updates
               </button>
             </div>
           </div>

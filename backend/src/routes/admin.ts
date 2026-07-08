@@ -25,12 +25,12 @@ router.get('/stats', authMiddleware, async (req, res) => {
   try {
     const graphStatus = graphService.getStatus();
 
-    // Merge DB user count + mock users (deduplicated)
-    let dbUsers: any[] = [];
-    try { dbUsers = await prisma.user.findMany({ select: { email: true } }); } catch {}
-    const dbEmails = new Set(dbUsers.map((u: any) => u.email));
-    const mockOnlyCount = mockUsers.filter(u => !dbEmails.has(u.email)).length;
-    const userCount = dbUsers.length + mockOnlyCount;
+    let userCount = 0;
+    try {
+      userCount = await prisma.user.count();
+    } catch (e: any) {
+      console.warn('[Admin Stats] Failed to query user count from PostgreSQL:', e.message);
+    }
 
     res.json({
       graphConnected: graphStatus.connected,
@@ -59,59 +59,68 @@ router.get('/analytics', authMiddleware, async (req, res) => {
 // ─── User Management ─────────────────────────────────────────────
 router.get('/users', authMiddleware, requireRole(['ADMIN']), async (req, res) => {
   try {
-    // Fetch DB users
-    let dbUsers: any[] = [];
-    try {
-      dbUsers = await prisma.user.findMany({
-        select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
-        orderBy: { createdAt: 'desc' }
-      });
-    } catch {}
-
-    // Merge with mock users, skipping emails that exist in DB
-    const dbEmails = new Set(dbUsers.map((u: any) => u.email));
-    const mockOnly = mockUsers
-      .filter(u => !dbEmails.has(u.email))
-      .map(u => ({ id: u.id, email: u.email, name: u.name, role: u.role, status: u.status, createdAt: u.createdAt }));
-
-    return res.json([...dbUsers, ...mockOnly]);
+    const dbUsers = await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        phone: true,
+        company: true,
+        lastLogin: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return res.json(dbUsers);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('[Admin] Fetch users error:', error?.message);
+    res.status(500).json({ error: 'Failed to fetch registered users from database.' });
   }
 });
 
 router.put('/users/:id', authMiddleware, requireRole(['ADMIN']), async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
-  const { role, status, name } = req.body;
+  const { role, status, name, phone, company } = req.body;
 
   // Prevent self-demotion
   if (id === req.user?.id && role && role !== 'ADMIN') {
     return res.status(400).json({ error: 'You cannot change your own admin role.' });
   }
 
+  // Prevent self-suspension
+  if (id === req.user?.id && status === 'SUSPENDED') {
+    return res.status(400).json({ error: 'You cannot suspend your own admin account.' });
+  }
+
   try {
     const updateData: any = {};
-    if (role) updateData.role = role;
-    if (status) updateData.status = status;
-    if (name) updateData.name = name;
+    if (role !== undefined) updateData.role = role;
+    if (status !== undefined) updateData.status = status;
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (company !== undefined) updateData.company = company;
 
-    try {
-      const updated = await prisma.user.update({
-        where: { id },
-        data: updateData,
-        select: { id: true, email: true, name: true, role: true, status: true, createdAt: true }
-      });
-      return res.json(updated);
-    } catch {
-      const mockUser = mockUsers.find(u => u.id === id);
-      if (!mockUser) return res.status(404).json({ error: 'User not found' });
-      if (role) mockUser.role = role;
-      if (status) mockUser.status = status;
-      if (name) mockUser.name = name;
-      return res.json({ id: mockUser.id, email: mockUser.email, name: mockUser.name, role: mockUser.role, status: mockUser.status });
-    }
+    const updated = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        phone: true,
+        company: true,
+        lastLogin: true,
+        createdAt: true
+      }
+    });
+    return res.json(updated);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('[Admin] Update user error:', error?.message);
+    res.status(500).json({ error: 'Failed to update user in database.' });
   }
 });
 
@@ -120,17 +129,11 @@ router.delete('/users/:id', authMiddleware, requireRole(['ADMIN']), async (req: 
   if (id === req.user?.id) return res.status(400).json({ error: 'Cannot delete your own account.' });
 
   try {
-    try {
-      await prisma.user.delete({ where: { id } });
-      return res.json({ success: true });
-    } catch {
-      const idx = mockUsers.findIndex(u => u.id === id);
-      if (idx === -1) return res.status(404).json({ error: 'User not found' });
-      mockUsers.splice(idx, 1);
-      return res.json({ success: true });
-    }
+    await prisma.user.delete({ where: { id } });
+    return res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('[Admin] Delete user error:', error?.message);
+    res.status(500).json({ error: 'Failed to delete user from database.' });
   }
 });
 

@@ -57,6 +57,8 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('ANALYST');
+  const [phone, setPhone] = useState('');
+  const [company, setCompany] = useState('');
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -163,7 +165,7 @@ export default function App() {
         localStorage.setItem('brgi_user', JSON.stringify(res.data.user));
         setToken(res.data.token); setUser(res.data.user);
       } else {
-        const res = await api.post('/auth/register', { email, password, name, role });
+        const res = await api.post('/auth/register', { email, password, name, role, phone, company });
         localStorage.setItem('brgi_token', res.data.token);
         localStorage.setItem('brgi_user', JSON.stringify(res.data.user));
         setToken(res.data.token); setUser(res.data.user);
@@ -188,7 +190,7 @@ export default function App() {
         if (allUsers.find(u => u.email === email)) {
           setAuthError('An account with this email already exists.');
         } else {
-          const newUser = { id: `u_${Date.now()}`, email, password, name, role };
+          const newUser = { id: `u_${Date.now()}`, email, password, name, role, phone, company };
           saveLocalUser(newUser);
           const { password: _, ...safeUser } = newUser;
           const mockToken = makeMockToken(safeUser);
@@ -327,14 +329,24 @@ export default function App() {
                   <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••••" className="input" />
                 </div>
                 {authMode === 'register' && (
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Role Privilege</label>
-                    <select value={role} onChange={e => setRole(e.target.value)} className="input">
-                      <option value="ADMIN">ADMIN — Full access &amp; database control</option>
-                      <option value="ANALYST">ANALYST — Entity modification</option>
-                      <option value="VIEWER">VIEWER — Read-only insights</option>
-                    </select>
-                  </div>
+                  <>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Phone Number (Optional)</label>
+                      <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 (555) 123-4567" className="input" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Company (Optional)</label>
+                      <input type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="Acme Corporation" className="input" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Role Privilege</label>
+                      <select value={role} onChange={e => setRole(e.target.value)} className="input">
+                        <option value="ADMIN">ADMIN — Full access &amp; database control</option>
+                        <option value="ANALYST">ANALYST — Entity modification</option>
+                        <option value="VIEWER">VIEWER — Read-only insights</option>
+                      </select>
+                    </div>
+                  </>
                 )}
                 <button type="submit" disabled={authLoading} className="btn-primary w-full justify-center !py-3">
                   {authLoading ? <RefreshCw size={16} className="animate-spin" /> : null}

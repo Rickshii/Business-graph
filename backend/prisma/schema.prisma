@@ -14,6 +14,9 @@ model User {
   name              String
   role              String     @default("ANALYST") // ADMIN, ANALYST, VIEWER
   status            String     @default("ACTIVE")  // ACTIVE, SUSPENDED
+  phone             String?
+  company           String?
+  lastLogin         DateTime?
   resetToken        String?    // Plain token stored for lookup (short-lived)
   resetTokenExpiry  DateTime?  // Expiry timestamp (1 hour from generation)
   createdAt         DateTime   @default(now())

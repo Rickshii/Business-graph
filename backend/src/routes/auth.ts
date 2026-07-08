@@ -54,7 +54,7 @@ export { mockUsers };
 // POST /auth/register
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role, phone, company } = req.body;
   if (!email || !password || !name) {
     return res.status(400).json({ error: 'All fields are required' });
   }
@@ -64,23 +64,23 @@ router.post('/register', async (req, res) => {
 
   try {
     const user = await prisma.user.create({
-      data: { email, passwordHash: hashedPassword, name, role: roleValue },
+      data: { email, passwordHash: hashedPassword, name, role: roleValue, phone, company },
     });
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET, { expiresIn: '7d' }
     );
-    return res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
+    return res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, phone: user.phone, company: user.company } });
   } catch (error: any) {
     if (error?.code === 'P2002') return res.status(400).json({ error: 'Email already exists' });
     // DB offline — mock fallback
     console.warn('[Auth] Prisma register failed. Using mock store.', error?.message);
     const userExists = mockUsers.find(u => u.email === email);
     if (userExists) return res.status(400).json({ error: 'Email already exists' });
-    const newUser = { id: `u_${Date.now()}`, email, passwordHash: hashedPassword, name, role: roleValue, status: 'ACTIVE', createdAt: new Date(), resetToken: null, resetTokenExpiry: null };
+    const newUser = { id: `u_${Date.now()}`, email, passwordHash: hashedPassword, name, role: roleValue, status: 'ACTIVE', phone: phone || null, company: company || null, createdAt: new Date(), resetToken: null, resetTokenExpiry: null };
     mockUsers.push(newUser);
     const token = jwt.sign({ id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name }, JWT_SECRET, { expiresIn: '7d' });
-    return res.status(201).json({ token, user: { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name } });
+    return res.status(201).json({ token, user: { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name, phone: newUser.phone, company: newUser.company } });
   }
 });
 
@@ -94,8 +94,17 @@ router.post('/login', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (user && bcrypt.compareSync(password, user.passwordHash)) {
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-      return res.json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
+      if (user.status === 'SUSPENDED') {
+        return res.status(403).json({ error: 'Your account has been suspended. Please contact an administrator.' });
+      }
+      
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() }
+      });
+
+      const token = jwt.sign({ id: updatedUser.id, email: updatedUser.email, role: updatedUser.role, name: updatedUser.name }, JWT_SECRET, { expiresIn: '7d' });
+      return res.json({ token, user: { id: updatedUser.id, email: updatedUser.email, role: updatedUser.role, name: updatedUser.name, phone: updatedUser.phone, company: updatedUser.company } });
     }
   } catch (error) {
     console.warn('[Auth] Prisma login failed. Falling back to mock store.');
@@ -104,8 +113,12 @@ router.post('/login', async (req, res) => {
   // Mock fallback
   const mockUser = mockUsers.find(u => u.email === email);
   if (mockUser && bcrypt.compareSync(password, mockUser.passwordHash)) {
+    if (mockUser.status === 'SUSPENDED') {
+      return res.status(403).json({ error: 'Your account has been suspended. Please contact an administrator.' });
+    }
+    mockUser.lastLogin = new Date();
     const token = jwt.sign({ id: mockUser.id, email: mockUser.email, role: mockUser.role, name: mockUser.name }, JWT_SECRET, { expiresIn: '7d' });
-    return res.json({ token, user: { id: mockUser.id, email: mockUser.email, role: mockUser.role, name: mockUser.name } });
+    return res.json({ token, user: { id: mockUser.id, email: mockUser.email, role: mockUser.role, name: mockUser.name, phone: mockUser.phone, company: mockUser.company } });
   }
 
   return res.status(401).json({ error: 'Invalid email or password' });
@@ -114,8 +127,21 @@ router.post('/login', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /auth/me
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/me', authMiddleware, (req: AuthenticatedRequest, res) => {
-  res.json({ user: req.user });
+router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, email: true, name: true, role: true, status: true, phone: true, company: true, lastLogin: true, createdAt: true }
+    });
+    if (user) {
+      if (user.status === 'SUSPENDED') {
+        return res.status(403).json({ error: 'Your account has been suspended.' });
+      }
+      return res.json({ user });
+    }
+  } catch {}
+  return res.json({ user: req.user });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
