@@ -8,15 +8,17 @@ generator client {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  passwordHash String
-  name         String
-  role         String     @default("ANALYST") // ADMIN, ANALYST, VIEWER
-  status       String     @default("ACTIVE")  // ACTIVE, SUSPENDED
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  auditLogs    AuditLog[]
+  id                String     @id @default(uuid())
+  email             String     @unique
+  passwordHash      String
+  name              String
+  role              String     @default("ANALYST") // ADMIN, ANALYST, VIEWER
+  status            String     @default("ACTIVE")  // ACTIVE, SUSPENDED
+  resetToken        String?    // Plain token stored for lookup (short-lived)
+  resetTokenExpiry  DateTime?  // Expiry timestamp (1 hour from generation)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  auditLogs         AuditLog[]
 }
 
 model Node {

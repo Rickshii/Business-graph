@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Network, LayoutDashboard, Database, 
   Settings as SettingsIcon, ShieldCheck, LogOut, Menu, 
-  Bell, Search, User, X, MessageSquare, FileBarChart2, RefreshCw
+  Bell, Search, User, X, MessageSquare, FileBarChart2, RefreshCw,
+  KeyRound, Mail, ArrowLeft, CheckCircle2, Eye, EyeOff
 } from 'lucide-react';
 import { api, getSocket } from './services/api';
 
@@ -49,21 +50,30 @@ export default function App() {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searching, setSearching] = useState(false);
 
-  // Auth states
-  const [isLogin, setIsLogin] = useState(true);
+  // Auth states — mode: 'login' | 'register' | 'forgot' | 'reset'
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
+  const [isLogin, setIsLogin] = useState(true); // kept for legacy compat
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('ANALYST');
   const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+
+  // Forgot / Reset password states
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   // Notifications
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[]>([]);
 
-  // Automatically adjust sidebar on window resize
+
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 1024) {
@@ -203,6 +213,49 @@ export default function App() {
     localStorage.setItem('brgi_user', JSON.stringify(updatedUser));
   };
 
+  // ── Forgot Password ────────────────────────────────────────────────────────
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return setAuthError('Please enter your email address.');
+    if (!newPw || newPw.length < 6) return setAuthError('New password must be at least 6 characters.');
+    if (newPw !== confirmPw) return setAuthError('Passwords do not match.');
+
+    setAuthLoading(true); setAuthError(''); setAuthSuccess('');
+    try {
+      const res = await api.post('/auth/forgot-password', { email: forgotEmail.trim(), newPassword: newPw });
+      setAuthSuccess(res.data.message || 'Password updated successfully! You can now log in.');
+      setForgotEmail(''); setNewPw(''); setConfirmPw('');
+      // Redirect to login after 2.5 seconds
+      setTimeout(() => { setAuthMode('login'); setAuthSuccess(''); setAuthError(''); }, 2500);
+    } catch (err: any) {
+      const isNetworkErr = !err.response && (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED');
+      if (isNetworkErr) {
+        // Backend offline — try local users (demo + registered)
+        const allUsers = getLocalUsers();
+        const userIndex = allUsers.findIndex(u => u.email === forgotEmail.trim());
+        if (userIndex !== -1) {
+          const updatedUser = { ...allUsers[userIndex], password: newPw };
+          const existingLocal = JSON.parse(localStorage.getItem('brgi_local_users') || '[]');
+          const localIndex = existingLocal.findIndex((u: any) => u.email === forgotEmail.trim());
+          if (localIndex !== -1) {
+            existingLocal[localIndex].password = newPw;
+            localStorage.setItem('brgi_local_users', JSON.stringify(existingLocal));
+          } else {
+            localStorage.setItem('brgi_local_users', JSON.stringify([...existingLocal, updatedUser]));
+          }
+          setAuthSuccess('Password updated successfully! (Local Mode)');
+          setForgotEmail(''); setNewPw(''); setConfirmPw('');
+          setTimeout(() => { setAuthMode('login'); setAuthSuccess(''); setAuthError(''); }, 2500);
+        } else {
+          setAuthError('Email address not found.');
+        }
+      } else {
+        setAuthError(err.response?.data?.error || 'Could not reset password. Try again.');
+      }
+    } finally { setAuthLoading(false); }
+  };
+
+
   const handleHighlightNodes = (nodeIds: string[]) => {
     setHighlightedNodeIds(nodeIds);
     setActiveTab('explorer');
@@ -226,76 +279,181 @@ export default function App() {
     INFLUENCER: '#06B6D4', COMPETITOR: '#F43F5E', REVIEW: '#F59E0B'
   };
 
-  // ─── Login Screen ──────────────────────────────────────────────────────────
+  // ─── Auth Screen (Login / Register / Forgot / Reset) ─────────────────────
   if (!token || !user) {
     return (
       <div className="min-h-screen bg-[#F5F7FA] flex items-center justify-center p-6 animate-fade-in font-sans">
         <div className="card max-w-md w-full p-8 space-y-6 relative overflow-hidden shadow-soft-lg rounded-3xl">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 to-cyan-400"></div>
 
+          {/* Logo */}
           <div className="text-center space-y-2">
             <div className="inline-flex p-3 rounded-2xl bg-indigo-50 text-indigo-600 mb-2">
-              <Network size={28} className="animate-pulse-slow" />
+              {authMode === 'forgot' ? <KeyRound size={28} /> : <Network size={28} className="animate-pulse-slow" />}
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 font-display">Graph Intelligence</h1>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Enterprise Relationship Analytics</p>
+            <h1 className="text-2xl font-bold text-slate-900 font-display">
+              {authMode === 'forgot' ? 'Reset Password' : 'Graph Intelligence'}
+            </h1>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+              {authMode === 'forgot' ? 'Choose a new secure password' : 'Enterprise Relationship Analytics'}
+            </p>
           </div>
 
-          <form onSubmit={handleAuthSubmit} className="space-y-4">
-            {!isLogin && (
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Full Name</label>
-                <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Sarah Connor" className="input" />
-              </div>
-            )}
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email Address</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="analyst@brgi.com" className="input" />
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Password</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••••" className="input" />
-            </div>
-            {!isLogin && (
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Role Privilege</label>
-                <select value={role} onChange={e => setRole(e.target.value)} className="input">
-                  <option value="ADMIN">ADMIN — Full access & database control</option>
-                  <option value="ANALYST">ANALYST — Entity modification</option>
-                  <option value="VIEWER">VIEWER — Read-only insights</option>
-                </select>
-              </div>
-            )}
-            {authError && <p className="text-xs font-semibold text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-100">{authError}</p>}
-            <button type="submit" disabled={authLoading} className="btn-primary w-full justify-center !py-3">
-              {authLoading ? <RefreshCw size={16} className="animate-spin" /> : null}
-              {authLoading ? 'Authenticating...' : (isLogin ? 'Authenticate Access' : 'Register Account')}
-            </button>
-          </form>
-
-          {isLogin && (
-            <div className="border-t border-slate-100 pt-4 space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Demo Accounts</span>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { role: 'ADMINISTRATOR', email: 'admin@brgi.com', pass: 'admin123', color: 'text-indigo-600' },
-                  { role: 'ANALYST', email: 'analyst@brgi.com', pass: 'analyst123', color: 'text-emerald-600' }
-                ].map(acc => (
-                  <button key={acc.email} onClick={() => handleQuickLogin(acc.email, acc.pass)}
-                    className="p-3 rounded-xl bg-white border border-slate-100 hover:border-slate-200 hover:-translate-y-0.5 shadow-soft-sm hover:shadow-soft-md text-left text-[10px] font-bold text-slate-700 block cursor-pointer transition-all duration-200">
-                    <div className={acc.color}>{acc.role}</div>
-                    <div className="text-slate-400 truncate">{acc.email}</div>
-                  </button>
-                ))}
-              </div>
+          {/* Alerts */}
+          {authError && <p className="text-xs font-semibold text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-100">{authError}</p>}
+          {authSuccess && (
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
+              <CheckCircle2 size={14} className="shrink-0" />
+              {authSuccess}
             </div>
           )}
 
-          <div className="text-center pt-2">
-            <button onClick={() => setIsLogin(!isLogin)} className="text-xs text-slate-400 font-bold hover:text-slate-600 cursor-pointer">
-              {isLogin ? 'Need a new account? Register' : 'Already have an account? Sign In'}
-            </button>
-          </div>
+          {/* ── LOGIN / REGISTER form ── */}
+          {(authMode === 'login' || authMode === 'register') && (
+            <>
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {authMode === 'register' && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Full Name</label>
+                    <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="Sarah Connor" className="input" />
+                  </div>
+                )}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Email Address</label>
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="analyst@brgi.com" className="input" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Password</label>
+                  <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••••" className="input" />
+                </div>
+                {authMode === 'register' && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Role Privilege</label>
+                    <select value={role} onChange={e => setRole(e.target.value)} className="input">
+                      <option value="ADMIN">ADMIN — Full access &amp; database control</option>
+                      <option value="ANALYST">ANALYST — Entity modification</option>
+                      <option value="VIEWER">VIEWER — Read-only insights</option>
+                    </select>
+                  </div>
+                )}
+                <button type="submit" disabled={authLoading} className="btn-primary w-full justify-center !py-3">
+                  {authLoading ? <RefreshCw size={16} className="animate-spin" /> : null}
+                  {authLoading ? 'Authenticating...' : (authMode === 'login' ? 'Authenticate Access' : 'Register Account')}
+                </button>
+              </form>
+
+              {/* Forgot password link */}
+              {authMode === 'login' && (
+                <div className="text-center -mt-2">
+                  <button
+                    onClick={() => { setAuthMode('forgot'); setAuthError(''); setAuthSuccess(''); setForgotEmail(email); }}
+                    className="text-xs text-indigo-500 hover:text-indigo-700 font-semibold cursor-pointer hover:underline"
+                  >
+                    Forgot your password?
+                  </button>
+                </div>
+              )}
+
+              {/* Demo accounts */}
+              {authMode === 'login' && (
+                <div className="border-t border-slate-100 pt-4 space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Demo Accounts</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { role: 'ADMINISTRATOR', email: 'admin@brgi.com', pass: 'admin123', color: 'text-indigo-600' },
+                      { role: 'ANALYST', email: 'analyst@brgi.com', pass: 'analyst123', color: 'text-emerald-600' }
+                    ].map(acc => (
+                      <button key={acc.email} onClick={() => handleQuickLogin(acc.email, acc.pass)}
+                        className="p-3 rounded-xl bg-white border border-slate-100 hover:border-slate-200 hover:-translate-y-0.5 shadow-soft-sm hover:shadow-soft-md text-left text-[10px] font-bold text-slate-700 block cursor-pointer transition-all duration-200">
+                        <div className={acc.color}>{acc.role}</div>
+                        <div className="text-slate-400 truncate">{acc.email}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-center pt-1">
+                <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setIsLogin(authMode !== 'login'); setAuthError(''); setAuthSuccess(''); }}
+                  className="text-xs text-slate-400 font-bold hover:text-slate-600 cursor-pointer">
+                  {authMode === 'login' ? 'Need a new account? Register' : 'Already have an account? Sign In'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ── FORGOT PASSWORD form ── */}
+          {authMode === 'forgot' && (
+            <>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Your Account Email</label>
+                  <input
+                    type="email" required value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    placeholder="analyst@brgi.com" className="input" autoFocus
+                  />
+                </div>
+                <div className="relative">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">New Password</label>
+                  <input
+                    type={showNewPw ? 'text' : 'password'} required value={newPw}
+                    onChange={e => setNewPw(e.target.value)}
+                    placeholder="Minimum 6 characters" className="input pr-10"
+                  />
+                  <button type="button" onClick={() => setShowNewPw(!showNewPw)}
+                    className="absolute right-3 top-8 text-slate-400 hover:text-slate-700 cursor-pointer">
+                    {showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                <div className="relative">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Confirm New Password</label>
+                  <input
+                    type={showConfirmPw ? 'text' : 'password'} required value={confirmPw}
+                    onChange={e => setConfirmPw(e.target.value)}
+                    placeholder="Repeat your new password" className="input pr-10"
+                  />
+                  <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)}
+                    className="absolute right-3 top-8 text-slate-400 hover:text-slate-700 cursor-pointer">
+                    {showConfirmPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {/* Password strength bar */}
+                {newPw && (
+                  <div className="space-y-1">
+                    <div className="flex gap-1">
+                      {[1,2,3,4].map(i => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                          newPw.length >= i * 3
+                            ? i <= 1 ? 'bg-rose-400' : i === 2 ? 'bg-amber-400' : i === 3 ? 'bg-blue-400' : 'bg-emerald-500'
+                            : 'bg-slate-100'
+                        }`} />
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      {newPw.length < 6 ? 'Too short' : newPw.length < 9 ? 'Fair' : newPw.length < 12 ? 'Good' : 'Strong'}
+                    </p>
+                  </div>
+                )}
+                {newPw && confirmPw && newPw !== confirmPw && (
+                  <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg">Passwords do not match</p>
+                )}
+                <button type="submit" disabled={authLoading || !!(authSuccess)} className="btn-primary w-full justify-center !py-3">
+                  {authLoading ? <RefreshCw size={16} className="animate-spin" /> : <KeyRound size={16} />}
+                  {authLoading ? 'Updating...' : authSuccess ? 'Redirecting to login...' : 'Update Password'}
+                </button>
+              </form>
+
+              {!authSuccess && (
+                <div className="text-center pt-1">
+                  <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess(''); setForgotEmail(''); setNewPw(''); setConfirmPw(''); }}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 font-bold hover:text-slate-600 cursor-pointer mx-auto">
+                    <ArrowLeft size={12} /> Back to Login
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     );
