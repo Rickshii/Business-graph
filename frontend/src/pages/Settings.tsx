@@ -34,11 +34,35 @@ export default function Settings({ onUserUpdate }: { onUserUpdate?: (user: any) 
 
   // Load user from localStorage token
   useEffect(() => {
+    const cached = localStorage.getItem('brgi_user');
+    if (cached) {
+      try {
+        const u = JSON.parse(cached);
+        setName(u.name || '');
+        setEmail(u.email || '');
+        setRole(u.role || '');
+      } catch {}
+    }
+
     api.get('/auth/me').then(res => {
       setName(res.data.user?.name || '');
       setEmail(res.data.user?.email || '');
       setRole(res.data.user?.role || '');
-    }).catch(() => {});
+      localStorage.setItem('brgi_user', JSON.stringify(res.data.user));
+    }).catch(() => {
+      // Backend offline / mock fallback
+      const token = localStorage.getItem('brgi_token');
+      if (token) {
+        try {
+          const decoded = JSON.parse(atob(token));
+          if (decoded) {
+            setName(decoded.name || '');
+            setEmail(decoded.email || '');
+            setRole(decoded.role || '');
+          }
+        } catch {}
+      }
+    });
   }, []);
 
   const showSuccess = () => {
@@ -67,8 +91,36 @@ export default function Settings({ onUserUpdate }: { onUserUpdate?: (user: any) 
         onUserUpdate?.(merged);
       }
       showSuccess();
-    } catch (e: any) {
-      setError(e.response?.data?.error || 'Profile update failed. Please try again.');
+    } catch (err: any) {
+      const isNetworkErr = !err.response && (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED');
+      if (isNetworkErr) {
+        // Backend offline fallback - save changes locally
+        const existing = JSON.parse(localStorage.getItem('brgi_user') || '{}');
+        const merged = { ...existing, name: name.trim() };
+        localStorage.setItem('brgi_user', JSON.stringify(merged));
+        
+        // Also update in brgi_local_users if email exists there
+        try {
+          const localUsers = JSON.parse(localStorage.getItem('brgi_local_users') || '[]');
+          const userIdx = localUsers.findIndex((u: any) => u.email === merged.email);
+          if (userIdx !== -1) {
+            localUsers[userIdx].name = name.trim();
+            localStorage.setItem('brgi_local_users', JSON.stringify(localUsers));
+          }
+        } catch {}
+
+        // Also generate a new mock token with updated name
+        try {
+          const newToken = btoa(JSON.stringify(merged));
+          localStorage.setItem('brgi_token', newToken);
+        } catch {}
+
+        setName(merged.name);
+        onUserUpdate?.(merged);
+        showSuccess();
+      } else {
+        setError(err.response?.data?.error || 'Profile update failed. Please try again.');
+      }
     } finally { setSaving(false); }
   };
 
@@ -92,8 +144,48 @@ export default function Settings({ onUserUpdate }: { onUserUpdate?: (user: any) 
       }
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
       showSuccess();
-    } catch (e: any) {
-      setError(e.response?.data?.error || 'Password change failed.');
+    } catch (err: any) {
+      const isNetworkErr = !err.response && (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED');
+      if (isNetworkErr) {
+        // Backend offline fallback - check if current password matches
+        const existing = JSON.parse(localStorage.getItem('brgi_user') || '{}');
+        try {
+          const localUsers = JSON.parse(localStorage.getItem('brgi_local_users') || '[]');
+          const defaultUsers = [
+            { id: 'u_admin',   email: 'admin@brgi.com',   password: 'admin123',   name: 'Administrator', role: 'ADMIN'   },
+            { id: 'u_analyst', email: 'analyst@brgi.com', password: 'analyst123', name: 'Sarah Connor',  role: 'ANALYST' },
+            { id: 'u_viewer',  email: 'viewer@brgi.com',  password: 'viewer123',  name: 'John Doe',      role: 'VIEWER'  },
+          ];
+          const allUsers = [...defaultUsers, ...localUsers];
+          const matchedUser = allUsers.find(u => u.email === existing.email);
+          
+          if (matchedUser && matchedUser.password !== currentPassword) {
+            setError('Current password is incorrect.');
+            setSaving(false);
+            return;
+          }
+          
+          // Update password
+          if (matchedUser) {
+            const updatedUser = { ...matchedUser, password: newPassword };
+            const existingLocal = JSON.parse(localStorage.getItem('brgi_local_users') || '[]');
+            const localIdx = existingLocal.findIndex((u: any) => u.email === existing.email);
+            if (localIdx !== -1) {
+              existingLocal[localIdx].password = newPassword;
+              localStorage.setItem('brgi_local_users', JSON.stringify(existingLocal));
+            } else {
+              localStorage.setItem('brgi_local_users', JSON.stringify([...existingLocal, updatedUser]));
+            }
+          }
+          
+          setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+          showSuccess();
+        } catch (localErr) {
+          setError('Failed to update password locally.');
+        }
+      } else {
+        setError(err.response?.data?.error || 'Password change failed.');
+      }
     } finally { setSaving(false); }
   };
 
