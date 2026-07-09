@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { AuthenticatedRequest, authMiddleware } from '../middleware/authMiddleware';
+import { io } from '../server';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -70,7 +71,10 @@ router.post('/register', async (req, res) => {
       { id: user.id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET, { expiresIn: '7d' }
     );
-    return res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, phone: user.phone, company: user.company } });
+    const safeUser = { id: user.id, email: user.email, role: user.role, name: user.name, phone: user.phone, company: user.company, status: user.status, createdAt: user.createdAt };
+    // Broadcast new user to all admin clients in real-time
+    try { io.emit('user:registered', safeUser); } catch {}
+    return res.status(201).json({ token, user: safeUser });
   } catch (error: any) {
     if (error?.code === 'P2002') return res.status(400).json({ error: 'Email already exists' });
     // DB offline — mock fallback
@@ -80,7 +84,10 @@ router.post('/register', async (req, res) => {
     const newUser = { id: `u_${Date.now()}`, email, passwordHash: hashedPassword, name, role: roleValue, status: 'ACTIVE', phone: phone || null, company: company || null, createdAt: new Date(), resetToken: null, resetTokenExpiry: null };
     mockUsers.push(newUser);
     const token = jwt.sign({ id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name }, JWT_SECRET, { expiresIn: '7d' });
-    return res.status(201).json({ token, user: { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name, phone: newUser.phone, company: newUser.company } });
+    const safeMockUser = { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name, phone: newUser.phone, company: newUser.company, status: newUser.status, createdAt: newUser.createdAt };
+    // Broadcast new user to admin clients even in mock mode
+    try { io.emit('user:registered', safeMockUser); } catch {}
+    return res.status(201).json({ token, user: safeMockUser });
   }
 });
 

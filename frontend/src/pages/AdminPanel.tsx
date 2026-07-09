@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, Activity, Database, Shield, AlertCircle, CheckCircle,
   RefreshCw, Trash2, Edit3, X, Check, Clock, Network,
-  Bell, FileText, ChevronDown, Search, ServerCrash
+  Bell, FileText, ChevronDown, Search, ServerCrash, UserPlus
 } from 'lucide-react';
 import { api } from '../services/api';
+import { getSocket } from '../services/api';
 import { MOCK_STATS, MOCK_USERS_LIST, MOCK_AUDIT_LOGS, MOCK_NOTIFICATIONS } from '../services/mockData';
 
 const ROLES = ['ADMIN', 'ANALYST', 'VIEWER'];
@@ -71,6 +72,20 @@ export default function AdminPanel() {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Real-time: auto-append newly registered users
+  useEffect(() => {
+    const socket = getSocket();
+    const onUserRegistered = (newUser: any) => {
+      setUsers(prev => {
+        // Avoid duplicates
+        if (prev.some(u => u.id === newUser.id)) return prev;
+        return [newUser, ...prev];
+      });
+    };
+    socket.on('user:registered', onUserRegistered);
+    return () => { socket.off('user:registered', onUserRegistered); };
+  }, []);
 
   const handleReseed = async () => {
     setReseeding(true); setReseedMsg('');
@@ -229,8 +244,9 @@ export default function AdminPanel() {
       <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-full overflow-x-auto scrollbar-none">
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${activeTab === tab.id ? 'bg-white text-indigo-600 shadow-soft-sm' : 'text-slate-400 hover:text-slate-700'}`}>
-            {tab.icon}{tab.label}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${activeTab === tab.id ? 'bg-white text-indigo-600 shadow-soft-sm' : 'text-slate-400 hover:text-slate-700'}`}>
+            {tab.icon}<span className="hidden sm:inline">{tab.label}</span>
+            <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
           </button>
         ))}
       </div>
@@ -291,22 +307,22 @@ export default function AdminPanel() {
       {activeTab === 'users' && (
         <div className="space-y-4 animate-slide-up">
           {/* Search and Filters */}
-          <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search by name, email, phone, company, or role..."
+                placeholder="Search name, email, phone, company..."
                 value={userSearch}
                 onChange={e => setUserSearch(e.target.value)}
                 className="input !pl-9 !py-2 text-xs w-full"
               />
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 flex-wrap">
               <select
                 value={userRoleFilter}
                 onChange={e => setUserRoleFilter(e.target.value)}
-                className="input !py-1 px-3 text-xs w-32 bg-white"
+                className="input !py-1.5 px-3 text-xs flex-1 min-w-[110px] bg-white"
               >
                 <option value="">All Roles</option>
                 <option value="ADMIN">ADMIN</option>
@@ -316,7 +332,7 @@ export default function AdminPanel() {
               <select
                 value={userStatusFilter}
                 onChange={e => setUserStatusFilter(e.target.value)}
-                className="input !py-1 px-3 text-xs w-32 bg-white"
+                className="input !py-1.5 px-3 text-xs flex-1 min-w-[110px] bg-white"
               >
                 <option value="">All Statuses</option>
                 <option value="ACTIVE">ACTIVE</option>
@@ -327,15 +343,15 @@ export default function AdminPanel() {
 
           {/* Table */}
           <div className="card overflow-x-auto shadow-soft-sm rounded-2xl border border-slate-100 bg-white">
-            <table className="data-table">
+            <table className="data-table" style={{ minWidth: '860px' }}>
               <thead>
                 <tr>
-                  <th>User</th>
+                  <th>Display Name</th>
                   <th>Email</th>
                   <th>Role</th>
-                  <th>Phone</th>
-                  <th>Company</th>
-                  <th>Joined</th>
+                  <th>Phone Number</th>
+                  <th>Company Name</th>
+                  <th>Registration Date</th>
                   <th>Status</th>
                   <th>Last Login</th>
                   <th className="text-center">Actions</th>
@@ -422,15 +438,12 @@ export default function AdminPanel() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-150 pt-4 px-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-slate-100 pt-4 px-1">
               <p className="text-xs text-slate-400">
-                Showing <span className="font-semibold text-slate-700">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-                <span className="font-semibold text-slate-700">
-                  {Math.min(currentPage * itemsPerPage, filteredUsers.length)}
-                </span>{' '}
-                of <span className="font-semibold text-slate-700">{filteredUsers.length}</span> registered users
+                Showing <span className="font-semibold text-slate-700">{(currentPage - 1) * itemsPerPage + 1}</span>–<span className="font-semibold text-slate-700">{Math.min(currentPage * itemsPerPage, filteredUsers.length)}</span> of{' '}
+                <span className="font-semibold text-slate-700">{filteredUsers.length}</span> users
               </p>
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 items-center">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
@@ -438,9 +451,9 @@ export default function AdminPanel() {
                 >
                   Previous
                 </button>
-                <div className="flex items-center gap-1 text-[11px] text-slate-500 font-bold px-2">
-                  Page {currentPage} of {totalPages}
-                </div>
+                <span className="text-[11px] text-slate-500 font-bold px-2">
+                  {currentPage} / {totalPages}
+                </span>
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}

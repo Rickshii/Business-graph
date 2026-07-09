@@ -242,9 +242,30 @@
     .topbar {
       left: 1rem !important;
       right: 1rem !important;
+      padding: 0 1rem !important;
     }
     .section-header {
       @apply flex flex-col items-start gap-3;
+    }
+  }
+
+  /* Extra-small screens */
+  @media (max-width: 480px) {
+    .main-content {
+      padding: 14px !important;
+      margin-left: 0.75rem !important;
+      margin-right: 0.75rem !important;
+    }
+    .topbar {
+      left: 0.75rem !important;
+      right: 0.75rem !important;
+    }
+    .sidebar {
+      left: 0.75rem;
+    }
+    .data-table th,
+    .data-table td {
+      @apply px-3 py-3 text-xs;
     }
   }
 
@@ -272,6 +293,12 @@
   .scrollbar-thin::-webkit-scrollbar { width: 4px; }
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
 
   /* React Flow overrides */
   .react-flow__background { background: #ffffff !important; }

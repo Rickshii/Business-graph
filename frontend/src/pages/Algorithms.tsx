@@ -170,7 +170,7 @@ export default function Algorithms({ initialAlgo = 'PAGERANK', setTab, onHighlig
                 <h3 className="text-base font-bold text-slate-900 mb-1 font-display">Influence Leaderboard</h3>
                 <p className="text-xs text-slate-400 mb-5">Relative centrality scores mapped via the PageRank Algorithm.</p>
                 <div className="overflow-x-auto">
-                  <table className="data-table">
+                  <table className="data-table" style={{ minWidth: '520px' }}>
                     <thead><tr><th>Rank</th><th>Entity Name</th><th>Class</th><th>PageRank Score</th><th className="text-right">Actions</th></tr></thead>
                     <tbody>
                       {pageRank.map((item, idx) => (
@@ -290,7 +290,7 @@ export default function Algorithms({ initialAlgo = 'PAGERANK', setTab, onHighlig
               <h3 className="text-base font-bold text-slate-900 mb-1 font-display">Alliance Recommendations</h3>
               <p className="text-xs text-slate-400 mb-5">Alliance opportunities calculated via mutual neighbors Jaccard Coefficients.</p>
               <div className="overflow-x-auto">
-                <table className="data-table">
+                <table className="data-table" style={{ minWidth: '560px' }}>
                   <thead><tr><th>Recommended Partners</th><th>Match Strength</th><th>Mutual Connections</th><th className="text-right">Action</th></tr></thead>
                   <tbody>
                     {partnerships.map((p, idx) => (
@@ -350,7 +350,7 @@ export default function Algorithms({ initialAlgo = 'PAGERANK', setTab, onHighlig
                 <h3 className="text-base font-bold text-slate-900 mb-1 font-display">Market Dominance Shares</h3>
                 <p className="text-xs text-slate-400 mb-5">Competitor network strength calculated by direct BUYS_FROM customer relations.</p>
                 <div className="overflow-x-auto">
-                  <table className="data-table">
+                  <table className="data-table" style={{ minWidth: '480px' }}>
                     <thead><tr><th>Brand Name</th><th>Customer Connections</th><th>Relative Market Share</th></tr></thead>
                     <tbody>
                       {dominance.map((d, i) => (

@@ -537,7 +537,7 @@ export default function App() {
 
       {/* Topbar */}
       <header className={`topbar ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        <div className="h-full px-8 flex items-center justify-between">
+        <div className="h-full px-4 sm:px-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-slate-500 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-all">
               <Menu size={18} />
@@ -600,7 +600,7 @@ export default function App() {
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 mt-3 w-80 bg-white border border-slate-100 rounded-2xl shadow-soft-lg p-4 space-y-3 z-50 animate-fade-in">
+                <div className="absolute right-0 mt-3 w-72 sm:w-80 bg-white border border-slate-100 rounded-2xl shadow-soft-lg p-4 space-y-3 z-50 animate-fade-in">
                   <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
                     <span className="text-xs font-bold text-slate-900 font-display">Notifications</span>
                     <button onClick={handleMarkAllRead} className="text-[10px] text-indigo-600 hover:underline font-bold cursor-pointer">Mark all read</button>

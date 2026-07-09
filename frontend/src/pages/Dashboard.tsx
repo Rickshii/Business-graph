@@ -162,22 +162,22 @@ export default function Dashboard({ setTab, onHighlightNodes }: { setTab: (tab: 
           <h1 className="text-3xl font-bold text-slate-900 font-display">Intelligence Dashboard</h1>
           <p className="text-sm text-slate-400 mt-1">Real-time enterprise graph analytics, node communities, and predictive relationship models.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => fetchAll(true)}
             disabled={refreshing}
             className="btn-secondary"
           >
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <button onClick={handleExportSummary} className="btn-secondary">
             <Download size={15} />
-            Export
+            <span className="hidden sm:inline">Export</span>
           </button>
           <button onClick={() => setTab('explorer')} className="btn-primary">
             <Network size={16} />
-            Open Graph Explorer
+            <span className="hidden sm:inline">Graph Explorer</span>
           </button>
         </div>
       </div>

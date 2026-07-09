@@ -313,7 +313,7 @@ export default function Entities({ initialType = 'BUSINESS', setTab, onHighlight
             <span className="ml-2 text-sm text-slate-400">Loading entities...</span>
           </div>
         ) : activeView === 'nodes' ? (
-          <table className="data-table">
+          <table className="data-table" style={{ minWidth: '560px' }}>
             <thead>
               <tr>
                 <th>Type</th>
@@ -366,7 +366,7 @@ export default function Entities({ initialType = 'BUSINESS', setTab, onHighlight
             </tbody>
           </table>
         ) : (
-          <table className="data-table">
+          <table className="data-table" style={{ minWidth: '700px' }}>
             <thead>
               <tr>
                 <th>Source</th>
