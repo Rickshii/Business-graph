@@ -104,6 +104,13 @@ export default function App() {
     }
   }, [token]);
 
+  // Redirect non-admin users away from the admin tab
+  useEffect(() => {
+    if (user && user.role !== 'ADMIN' && activeTab === 'admin') {
+      setActiveTab('dashboard');
+    }
+  }, [user, activeTab]);
+
   // Load notifications from API
   useEffect(() => {
     if (token) {
@@ -646,7 +653,7 @@ export default function App() {
         {activeTab === 'algorithms' && <Algorithms initialAlgo="PAGERANK" setTab={setActiveTab} onHighlightNodes={handleHighlightNodes} />}
         {activeTab === 'aichat' && <AIChat setTab={setActiveTab} onHighlightNodes={handleHighlightNodes} />}
         {activeTab === 'reports' && <Reports />}
-        {activeTab === 'admin' && <AdminPanel user={user} />}
+        {activeTab === 'admin' && user?.role === 'ADMIN' && <AdminPanel user={user} />}
         {activeTab === 'settings' && <Settings onUserUpdate={handleUserUpdate} />}
       </main>
     </div>
