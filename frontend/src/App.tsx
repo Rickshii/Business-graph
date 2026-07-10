@@ -646,7 +646,7 @@ export default function App() {
         {activeTab === 'algorithms' && <Algorithms initialAlgo="PAGERANK" setTab={setActiveTab} onHighlightNodes={handleHighlightNodes} />}
         {activeTab === 'aichat' && <AIChat setTab={setActiveTab} onHighlightNodes={handleHighlightNodes} />}
         {activeTab === 'reports' && <Reports />}
-        {activeTab === 'admin' && <AdminPanel />}
+        {activeTab === 'admin' && <AdminPanel user={user} />}
         {activeTab === 'settings' && <Settings onUserUpdate={handleUserUpdate} />}
       </main>
     </div>

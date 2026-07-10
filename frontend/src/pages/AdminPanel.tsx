@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Users, Activity, Database, Shield, AlertCircle, CheckCircle,
+  Users, Activity, Database, AlertCircle, CheckCircle,
   RefreshCw, Trash2, Edit3, X, Check, Clock, Network,
-  Bell, FileText, ChevronDown, Search, ServerCrash, UserPlus
+  Bell, FileText, Search, ServerCrash, ShieldOff
 } from 'lucide-react';
-import { api } from '../services/api';
-import { getSocket } from '../services/api';
-import { MOCK_STATS, MOCK_USERS_LIST, MOCK_AUDIT_LOGS, MOCK_NOTIFICATIONS } from '../services/mockData';
+import { api, getSocket } from '../services/api';
+import { MOCK_STATS, MOCK_AUDIT_LOGS, MOCK_NOTIFICATIONS } from '../services/mockData';
 
 const ROLES = ['ADMIN', 'ANALYST', 'VIEWER'];
 const STATUSES = ['ACTIVE', 'SUSPENDED'];
@@ -25,9 +24,10 @@ function StatCard({ label, value, icon, color }: { label: string; value: any; ic
   );
 }
 
-export default function AdminPanel() {
+export default function AdminPanel({ user }: { user: any }) {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'notifications'>('overview');
@@ -36,7 +36,10 @@ export default function AdminPanel() {
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [savingUser, setSavingUser] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [deleteUser, setDeleteUser] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [reseeding, setReseeding] = useState(false);
   const [reseedMsg, setReseedMsg] = useState('');
   const [userSearch, setUserSearch] = useState('');
@@ -49,26 +52,47 @@ export default function AdminPanel() {
   const [newNotif, setNewNotif] = useState({ title: '', message: '', type: 'INFO' });
   const [sendingNotif, setSendingNotif] = useState(false);
 
+  // Role guard — block if not ADMIN
+  if (!user || user.role !== 'ADMIN') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-center py-20">
+        <div className="w-16 h-16 rounded-3xl bg-rose-50 flex items-center justify-center">
+          <ShieldOff size={28} className="text-rose-500" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900">Access Restricted</h2>
+        <p className="text-sm text-slate-500 max-w-xs">The Admin Panel is only accessible to users with the <strong>ADMIN</strong> role. Contact your administrator for access.</p>
+      </div>
+    );
+  }
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    setUsersError(null);
     try {
-      const [statsRes, usersRes, logsRes, notifsRes] = await Promise.all([
+      // Fetch users from real DB — no mock fallback
+      const usersRes = await api.get('/admin/users');
+      setUsers(usersRes.data);
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.message || 'Failed to load users from database.';
+      setUsersError(msg);
+      setUsers([]);
+    }
+    // Stats / logs / notifications can use mock fallback safely
+    try {
+      const [statsRes, logsRes, notifsRes] = await Promise.all([
         api.get('/admin/stats'),
-        api.get('/admin/users'),
         api.get('/admin/logs'),
         api.get('/admin/notifications')
       ]);
       setStats(statsRes.data);
-      setUsers(usersRes.data);
       setLogs(logsRes.data);
       setNotifications(notifsRes.data);
-    } catch (e) {
-      console.warn('Backend offline — loading mock admin dashboard data.');
+    } catch {
       setStats(MOCK_STATS);
-      setUsers(MOCK_USERS_LIST);
       setLogs(MOCK_AUDIT_LOGS);
       setNotifications(MOCK_NOTIFICATIONS);
-    } finally { setLoading(false); }
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -111,6 +135,7 @@ export default function AdminPanel() {
   const handleSaveUser = async () => {
     if (!editUser) return;
     setSavingUser(true);
+    setSaveError('');
     try {
       const res = await api.put(`/admin/users/${editUser.id}`, {
         name: editName,
@@ -120,36 +145,38 @@ export default function AdminPanel() {
         company: editCompany
       });
       setUsers(prev => prev.map(u => u.id === editUser.id ? res.data : u));
-    } catch (e: any) {
-      console.warn('Failed to update user in backend, updating locally:', e?.response?.data?.error || e.message);
-      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: editName, role: editRole, status: editStatus, phone: editPhone, company: editCompany } : u));
-    } finally {
       setEditUser(null);
+    } catch (e: any) {
+      setSaveError(e?.response?.data?.error || 'Database update failed. Please try again.');
+    } finally {
       setSavingUser(false);
     }
   };
 
-  const handleToggleStatus = async (user: any) => {
-    const newStatus = user.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+  const handleToggleStatus = async (u: any) => {
+    const newStatus = u.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+    setActionError('');
     try {
-      const res = await api.put(`/admin/users/${user.id}`, { status: newStatus });
-      setUsers(prev => prev.map(u => u.id === user.id ? res.data : u));
+      const res = await api.put(`/admin/users/${u.id}`, { status: newStatus });
+      setUsers(prev => prev.map(x => x.id === u.id ? res.data : x));
     } catch (e: any) {
-      console.error('Failed to toggle status on backend:', e?.response?.data?.error || e.message);
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
+      setActionError(e?.response?.data?.error || 'Failed to update status in database.');
     }
   };
 
   const handleDeleteUser = async () => {
     if (!deleteUser) return;
+    setDeleting(true);
+    setActionError('');
     try {
       await api.delete(`/admin/users/${deleteUser.id}`);
       setUsers(prev => prev.filter(u => u.id !== deleteUser.id));
-    } catch (e: any) {
-      console.warn('Backend offline — deleting user locally.');
-      setUsers(prev => prev.filter(u => u.id !== deleteUser.id));
-    } finally {
       setDeleteUser(null);
+    } catch (e: any) {
+      setActionError(e?.response?.data?.error || 'Failed to delete user from database.');
+      setDeleteUser(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -341,6 +368,29 @@ export default function AdminPanel() {
             </div>
           </div>
 
+          {/* DB Error banner */}
+          {usersError && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-700">
+              <ServerCrash size={18} className="shrink-0" />
+              <div>
+                <p className="text-xs font-bold">Failed to load users from database</p>
+                <p className="text-xs opacity-80 mt-0.5">{usersError}</p>
+              </div>
+              <button onClick={() => fetchAll()} className="ml-auto btn-secondary !py-1 !px-2.5 text-xs text-rose-700 border-rose-200">
+                <RefreshCw size={12} /> Retry
+              </button>
+            </div>
+          )}
+
+          {/* Action error banner */}
+          {actionError && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-50 border border-rose-100 text-rose-700">
+              <AlertCircle size={15} className="shrink-0" />
+              <p className="text-xs font-semibold flex-1">{actionError}</p>
+              <button onClick={() => setActionError('')} className="text-rose-400 hover:text-rose-700"><X size={14} /></button>
+            </div>
+          )}
+
           {/* Table */}
           <div className="card overflow-x-auto shadow-soft-sm rounded-2xl border border-slate-100 bg-white">
             <table className="data-table" style={{ minWidth: '860px' }}>
@@ -425,10 +475,10 @@ export default function AdminPanel() {
                     </td>
                   </tr>
                 ))}
-                {filteredUsers.length === 0 && (
+                {filteredUsers.length === 0 && !usersError && (
                   <tr>
                     <td colSpan={9} className="text-center py-12 text-slate-400 text-sm font-medium">
-                      No registered users found.
+                      {users.length === 0 ? 'No users found in the database yet.' : 'No users match your current filters.'}
                     </td>
                   </tr>
                 )}
@@ -594,8 +644,11 @@ export default function AdminPanel() {
                 </div>
               </div>
             </div>
+            {saveError && (
+              <p className="text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-xl p-2.5 font-semibold">{saveError}</p>
+            )}
             <div className="flex gap-2">
-              <button onClick={() => setEditUser(null)} className="btn-secondary flex-1 justify-center">Cancel</button>
+              <button onClick={() => { setEditUser(null); setSaveError(''); }} className="btn-secondary flex-1 justify-center">Cancel</button>
               <button onClick={handleSaveUser} disabled={savingUser} className="btn-primary flex-1 justify-center">
                 {savingUser ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
                 Save Updates
