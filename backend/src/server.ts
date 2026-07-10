@@ -45,8 +45,9 @@ app.options('*', cors(corsOptions));
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins.includes('*') ? '*' : allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+    origin: corsOptions.origin,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    credentials: true
   }
 });
 
