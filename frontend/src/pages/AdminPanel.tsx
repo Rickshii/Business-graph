@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api, getSocket } from '../services/api';
 import { MOCK_STATS, MOCK_AUDIT_LOGS, MOCK_NOTIFICATIONS } from '../services/mockData';
+import { parseAxiosError, FriendlyError } from '../utils/errorHelper';
 
 const ROLES = ['ADMIN', 'ANALYST', 'VIEWER'];
 const STATUSES = ['ACTIVE', 'SUSPENDED'];
@@ -27,7 +28,8 @@ function StatCard({ label, value, icon, color }: { label: string; value: any; ic
 export default function AdminPanel({ user }: { user: any }) {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [usersError, setUsersError] = useState<string | null>(null);
+  const [usersError, setUsersError] = useState<FriendlyError | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'logs' | 'notifications'>('overview');
@@ -65,16 +67,20 @@ export default function AdminPanel({ user }: { user: any }) {
     );
   }
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async (isRetry = false) => {
+    if (isRetry) {
+      setRetrying(true);
+    } else {
+      setLoading(true);
+    }
     setUsersError(null);
     try {
       // Fetch users from real DB — no mock fallback
       const usersRes = await api.get('/admin/users');
       setUsers(usersRes.data);
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Failed to load users from database.';
-      setUsersError(msg);
+      const parsed = parseAxiosError(e);
+      setUsersError(parsed);
       setUsers([]);
     }
     // Stats / logs / notifications can use mock fallback safely
@@ -93,6 +99,7 @@ export default function AdminPanel({ user }: { user: any }) {
       setNotifications(MOCK_NOTIFICATIONS);
     }
     setLoading(false);
+    setRetrying(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -370,14 +377,29 @@ export default function AdminPanel({ user }: { user: any }) {
 
           {/* DB Error banner */}
           {usersError && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-700">
-              <ServerCrash size={18} className="shrink-0" />
-              <div>
-                <p className="text-xs font-bold">Failed to load users from database</p>
-                <p className="text-xs opacity-80 mt-0.5">{usersError}</p>
+            <div className={`flex items-start sm:items-center gap-3 p-4 rounded-2xl border transition-all ${
+              usersError.type === 'NETWORK' 
+                ? 'bg-amber-50 border-amber-200 text-amber-800' 
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}>
+              <ServerCrash size={18} className="shrink-0 mt-0.5 sm:mt-0" />
+              <div className="flex-1">
+                <p className="text-xs font-bold">
+                  {usersError.type === 'NETWORK' ? 'Server Connection Failed' : 'Database Error'}
+                </p>
+                <p className="text-xs opacity-80 mt-0.5">{usersError.message}</p>
               </div>
-              <button onClick={() => fetchAll()} className="ml-auto btn-secondary !py-1 !px-2.5 text-xs text-rose-700 border-rose-200">
-                <RefreshCw size={12} /> Retry
+              <button 
+                onClick={() => fetchAll(true)} 
+                disabled={retrying}
+                className={`ml-auto btn-secondary !py-1 !px-2.5 text-xs flex items-center gap-1.5 transition-all ${
+                  usersError.type === 'NETWORK' 
+                    ? 'text-amber-800 border-amber-300 hover:bg-amber-100/50' 
+                    : 'text-rose-800 border-rose-300 hover:bg-rose-100/50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <RefreshCw size={12} className={retrying ? 'animate-spin' : ''} /> 
+                {retrying ? 'Retrying...' : 'Retry'}
               </button>
             </div>
           )}
