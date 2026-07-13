@@ -45,12 +45,10 @@ api.interceptors.response.use(
         '  Attempted:', error.config?.baseURL, error.config?.url
       );
     } else if (error.response.status === 401) {
-      console.warn('[BRGI API] 401 Unauthorized — clearing stale session and redirecting to login.');
+      console.warn('[BRGI API] 401 Unauthorized — clearing stale session and reloading.');
       localStorage.removeItem('brgi_token');
       localStorage.removeItem('brgi_user');
-      if (window.location.pathname !== '/') {
-        window.location.href = '/';
-      }
+      window.location.reload();
     }
     return Promise.reject(error);
   }

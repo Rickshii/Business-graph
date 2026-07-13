@@ -95,7 +95,12 @@ export default function App() {
       if (cached) { try { setUser(JSON.parse(cached)); } catch {} }
       api.get('/auth/me')
         .then(res => { setUser(res.data.user); localStorage.setItem('brgi_user', JSON.stringify(res.data.user)); })
-        .catch(() => {
+        .catch((err) => {
+          // If the backend is online and rejected the token explicitly, do not fall back to mock token
+          if (err?.response) {
+            handleLogout();
+            return;
+          }
           // Backend offline — try to decode mock token
           const decoded = parseMockToken(token);
           if (decoded) { setUser(decoded); }
