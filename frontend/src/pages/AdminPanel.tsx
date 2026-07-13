@@ -385,7 +385,11 @@ export default function AdminPanel({ user }: { user: any }) {
               <ServerCrash size={18} className="shrink-0 mt-0.5 sm:mt-0" />
               <div className="flex-1">
                 <p className="text-xs font-bold">
-                  {usersError.type === 'NETWORK' ? 'Server Connection Failed' : 'Database Error'}
+                  {usersError.type === 'NETWORK' 
+                    ? 'Server Connection Failed' 
+                    : usersError.type === 'AUTH' 
+                      ? 'Authentication Failure' 
+                      : 'Database Error'}
                 </p>
                 <p className="text-xs opacity-80 mt-0.5">{usersError.message}</p>
               </div>

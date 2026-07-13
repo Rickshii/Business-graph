@@ -45,7 +45,12 @@ api.interceptors.response.use(
         '  Attempted:', error.config?.baseURL, error.config?.url
       );
     } else if (error.response.status === 401) {
-      console.warn('[BRGI API] 401 Unauthorized — JWT token may be expired.');
+      console.warn('[BRGI API] 401 Unauthorized — clearing stale session and redirecting to login.');
+      localStorage.removeItem('brgi_token');
+      localStorage.removeItem('brgi_user');
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
     }
     return Promise.reject(error);
   }
